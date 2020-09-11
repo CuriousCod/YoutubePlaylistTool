@@ -11,6 +11,7 @@ Create and manage Youtube playlists using URLs. Useful when creating a playlist 
 - Press Add Links button </br></br>
 - To obtain video information press the Update button or click individual video ids on the list. </br>
 - Copy buttons copy the displayed list to clipboard (original or random order)
+- You can delete videos from list using mouse right-click
 
 <h3>Notes</h3>
 
