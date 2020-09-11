@@ -174,21 +174,24 @@ while True:
             title = db.get(Link.videoId == i)
             title = title.get('title')
             if title == "":
-                ydl = youtube_dl.YoutubeDL({'outtmpl': '%(id)s.%(ext)s', 'cookiefile': 'cookies.txt'})
-                info = ydl.extract_info(i, download=False)
-                print(info['title'])
-                print(info['thumbnail'])
-                print(info['duration'])
-                print(info['uploader'])
+                try:
+                    ydl = youtube_dl.YoutubeDL({'outtmpl': '%(id)s.%(ext)s', 'cookiefile': 'cookies.txt'})
+                    info = ydl.extract_info(i, download=False)
+                    print(info['title'])
+                    print(info['thumbnail'])
+                    print(info['duration'])
+                    print(info['uploader'])
 
-                video_duration = str(int(info['duration'] / 60))
-                video_duration = video_duration + ':' + str(info['duration'] % 60).zfill(2)
+                    video_duration = str(int(info['duration'] / 60))
+                    video_duration = video_duration + ':' + str(info['duration'] % 60).zfill(2)
 
-                db.update(Set('title', info['title']), Link.videoId == i)
-                db.update(Set('thumbnail', info['thumbnail']), Link.videoId == i)
-                db.update(Set('duration', video_duration), Link.videoId == i)
-                db.update(Set('uploader', info['uploader']), Link.videoId == i)
-                time.sleep(3)
+                    db.update(Set('title', info['title']), Link.videoId == i)
+                    db.update(Set('thumbnail', info['thumbnail']), Link.videoId == i)
+                    db.update(Set('duration', video_duration), Link.videoId == i)
+                    db.update(Set('uploader', info['uploader']), Link.videoId == i)
+                    time.sleep(3)
+                except youtube_dl.utils.DownloadError:
+                    print('Unable to download video information!')
 
         window['links'].update(viewData())
 
