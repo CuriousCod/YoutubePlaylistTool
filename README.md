@@ -12,7 +12,7 @@ Create and manage Youtube playlists using URLs. Useful when creating a playlist 
 
 <h3>Managing videos</h3>
 
-- To obtain video information press the Update button or click individual video ids on the list. </br>
+- To obtain video information press the Update button or click individual video ids on the list (Grab a coffee, if you have a lot of videos). </br>
 - Copy buttons copy the displayed list to clipboard (original or random order)
 - You can delete videos from list using mouse right-click
 - List is automatically saved to the db.json file in the application folder
