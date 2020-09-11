@@ -3,12 +3,15 @@ Create and manage Youtube playlists using URLs. Useful when creating a playlist 
 
 <b>Work in progress</b>
 
-<h3>Usage</h3>
+<h3>Adding videos</h3>
 
 - Press Add button in application to open the input window </br>
 - Paste Youtube URLs to the list in this format: www.youtube.com/watch?v= </br>
   - You can also add a playlist by copying a playlist's source code to clipboard and pressing Add Source button </br>
-- Press Add Links button </br></br>
+- Press Add Links button
+
+<h3>Managing videos</h3>
+
 - To obtain video information press the Update button or click individual video ids on the list. </br>
 - Copy buttons copy the displayed list to clipboard (original or random order)
 - You can delete videos from list using mouse right-click
