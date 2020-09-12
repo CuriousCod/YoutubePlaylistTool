@@ -21,11 +21,12 @@ db = TinyDB('db.json')
 Link = Query()
 
 
-def filter():
-    videoIds = db.search(Link.videoId.search(values['videoFilter'], flags=re.IGNORECASE))
-    videoTitles = db.search(Link.title.search(values['videoFilter'], flags=re.IGNORECASE))
+def filtering():
+    videos = db.search((Link.videoId.search(values['videoFilter'], flags=re.IGNORECASE)) |
+                       (Link.videoId.search(values['videoFilter'][-11:], flags=re.IGNORECASE)) |
+                       (Link.title.search(values['videoFilter'], flags=re.IGNORECASE)))
 
-    combine = [i['videoId'] + ' - ' + i['duration'] + ' - ' + i['title'] for i in videoTitles] + [i['videoId'] + ' - ' + i['duration'] + ' - ' + i['title'] for i in videoIds]
+    combine = [i['videoId'] + ' - ' + i['duration'] + ' - ' + i['title'] for i in videos]
 
     return combine
 
@@ -41,6 +42,7 @@ def viewData():
     #    combine.append(item1 + ' - ' + item3 + ' - ' + item2)
 
     return combine
+
 
 def extractVideos():
     text = pyperclip.paste()
@@ -63,7 +65,7 @@ def extractVideos():
 
     return playlist
 
-col1 = [
+col1 = [ # Not in use
         [sg.Text('Filter', size=(38,2))],
         [sg.In(size=(38,2), enable_events=True, key='videoFilter')],
         [sg.Text('', size=(1, 1))],
@@ -74,12 +76,17 @@ col1 = [
 
 layout = [
 #    [menu_elem],
-    [sg.Listbox(values=viewData(), key='links', size=(100, 35), enable_events=True, right_click_menu=['&Right', ['Copy URL', 'Delete video']]),
-     sg.Column(col1)],
+    [sg.Listbox(values=viewData(), key='links', size=(130, 36), enable_events=True, right_click_menu=['&Right', ['Copy URL', 'Delete video']])],
+    [sg.Text('Filter', size=(6, 1)),
+    sg.In(size=(20, 1), enable_events=True, key='videoFilter'),
+    sg.Button('Clear')],
+    [sg.Text('')],
     [sg.Button('Add'),
     sg.Button('Update'),
     sg.Button('Copy'),
-    sg.Button('Copy Random', key='copy random')]
+    sg.Button('Copy Random', key='copy random'),
+    sg.Text('', size=(47, 1)),
+    ]
     #sg.Button('Script')] # For running quick db scripts
 
 ]
@@ -92,7 +99,7 @@ layout2 = [
 ]
 
 global window
-window = sg.Window('Youtube Playlist Tool', layout, font='Courier 12', size=(1280, 720)).finalize()
+window = sg.Window('Youtube Playlist Tool', layout, font='Courier 12', size=(1280, 800)).finalize()
 window2 = sg.Window('Youtube Playlist Tool - Add Videos', layout2, font='Courier 12', disable_close=True).finalize()
 window2.hide()
 
@@ -237,7 +244,7 @@ while True:
 
     if event == 'videoFilter':
         if len(values['videoFilter']) > 2:
-            window['links'].update(filter())
+            window['links'].update(filtering())
         else:
             window['links'].update(viewData())
 
