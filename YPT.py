@@ -5,9 +5,10 @@ from tinydb.operations import set as Set
 import re, time, random
 import pyperclip
 
+# TODO add total video count
+
+
 sg.theme('Topanga')
-
-
 
 menu_def = [['File', ['Select CustomLevels Folder', 'Exit']],
             ['Settings', ['Use Normal Auto Offset', 'Use Fast Auto Offset            X']],
@@ -20,14 +21,24 @@ db = TinyDB('db.json')
 Link = Query()
 
 
-def viewData():
-    titles = [i['title'] for i in db]
-    ids = [i['videoId'] for i in db]
-    dur = [i['duration'] for i in db]
-    combine = []
+def filter():
+    videoIds = db.search(Link.videoId.search(values['videoFilter'], flags=re.IGNORECASE))
+    videoTitles = db.search(Link.title.search(values['videoFilter'], flags=re.IGNORECASE))
 
-    for (item1, item2, item3) in zip(ids, titles, dur):
-        combine.append(item1 + ' - ' + item3 + ' - ' + item2)
+    combine = [i['videoId'] + ' - ' + i['duration'] + ' - ' + i['title'] for i in videoTitles] + [i['videoId'] + ' - ' + i['duration'] + ' - ' + i['title'] for i in videoIds]
+
+    return combine
+
+def viewData():
+    #titles = [i['title'] for i in db]
+    #ids = [i['videoId'] for i in db]
+    #dur = [i['duration'] for i in db]
+    #combine = []
+
+    combine = [i['videoId'] + ' - ' + i['duration'] + ' - ' + i['title'] for i in db]
+
+    #for (item1, item2, item3) in zip(ids, titles, dur):
+    #    combine.append(item1 + ' - ' + item3 + ' - ' + item2)
 
     return combine
 
@@ -53,16 +64,12 @@ def extractVideos():
     return playlist
 
 col1 = [
-        [sg.Text('Filters', size=(38,2))],
-        [sg.Text('Title', size=(38,1))],
-        [sg.In(size=(38,2), key='Title')],
-        [sg.Text('Author', size=(38, 1))],
-        [sg.In(size=(38,2), key='Author')],
-        [sg.Text('Tags', size=(38, 1))],
-        [sg.In(size=(38,2), key='Tags')],
+        [sg.Text('Filter', size=(38,2))],
+        [sg.In(size=(38,2), enable_events=True, key='videoFilter')],
         [sg.Text('', size=(1, 1))],
         [sg.Button('Clear')],
-        [sg.Text('', size=(38, 21))]
+        [sg.Text('', size=(38, 28))]
+
     ]
 
 layout = [
@@ -145,6 +152,7 @@ while True:
                     print(info['title'])
                     print(info['thumbnail'])
                     print(info['duration'])
+                    print(info['uploader'])
 
                     video_duration = str(int(info['duration'] / 60))
                     video_duration = video_duration + ':' + str(info['duration'] % 60).zfill(2)
@@ -152,6 +160,7 @@ while True:
                     db.update(Set('title', info['title']), Link.videoId == videoId)
                     db.update(Set('thumbnail', info['thumbnail']), Link.videoId == videoId)
                     db.update(Set('duration', video_duration), Link.videoId == videoId)
+                    db.update(Set('uploader', info['uploader']), Link.videoId == videoId)
                     window['links'].update(viewData())
 
                 url = db.get(Link.videoId == videoId)
@@ -221,5 +230,15 @@ while True:
         ids = [i['videoId'] for i in db]
         for i in ids:
             db.update(Set('uploader', ''), Link.videoId == i)
+
+    if event == 'Clear':
+        window['videoFilter'].update('')
+        window['links'].update(viewData())
+
+    if event == 'videoFilter':
+        if len(values['videoFilter']) > 2:
+            window['links'].update(filter())
+        else:
+            window['links'].update(viewData())
 
 window.close()
