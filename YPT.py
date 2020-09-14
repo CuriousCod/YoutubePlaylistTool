@@ -1,12 +1,13 @@
 import PySimpleGUI as sg
-from tinydb import TinyDB, Query, where
+from tinydb import TinyDB, Query
 import youtube_dl
 from tinydb.operations import set as Set
 import re, time, random
 import pyperclip
 
-# TODO add total video count
-
+# TODO Add total video count
+# TODO Support for multiple db
+# TODO Display current random seed
 
 sg.theme('Topanga')
 
@@ -57,8 +58,11 @@ def extractVideos():
             links.append(url)
 
     # Remove first and last unrelated entries from the list
-    links.pop(0)
-    links.pop()
+    try:
+        links.pop(0)
+        links.pop()
+    except IndexError:
+        return 'Found no videos'
 
     # Add youtube url format to the video id
     playlist = ['https://www.youtube.com/watch?v=' + i for i in links]
@@ -79,7 +83,7 @@ layout = [
     [sg.Listbox(values=viewData(), key='links', size=(130, 36), enable_events=True, right_click_menu=['&Right', ['Copy URL', 'Delete video']])],
     [sg.Text('Filter', size=(6, 1)),
     sg.In(size=(20, 1), enable_events=True, key='videoFilter'),
-    sg.Button('Clear')],
+    sg.Button('X', key='clear')],
     [sg.Text('')],
     [sg.Button('Add'),
     sg.Button('Update'),
@@ -92,7 +96,7 @@ layout = [
 ]
 
 layout2 = [
-    [sg.Multiline('', key='input', size=(48, 28), focus=True)],
+    [sg.Multiline('', key='input', size=(48, 28), focus=True, right_click_menu=['&Right', ['Paste']])],
     [sg.Button('Add links', key='add links'),
     sg.Button('Add source', key='add source')],
     [sg.Button('Cancel', key='cancel')]
@@ -121,7 +125,10 @@ while True:
                 break
 
             if event == 'add source':
-                window2['input'].update(extractVideos())
+                    window2['input'].update(extractVideos())
+
+            if event == 'Paste':
+                window2['input'].update(pyperclip.paste())
 
             if event == 'add links':
                 links = values['input'].split('\n')
@@ -170,16 +177,13 @@ while True:
                     db.update(Set('uploader', info['uploader']), Link.videoId == videoId)
                     window['links'].update(viewData())
 
-                url = db.get(Link.videoId == videoId)
-                print('https://www.youtube.com/watch?v=' + url.get('videoId'))
-                title = db.get(Link.videoId == videoId)
-                print(title.get('title'))
-                thumbnail = db.get(Link.videoId == videoId)
-                print (thumbnail.get('thumbnail'))
-                duration = db.get(Link.videoId == videoId)
-                print (duration.get('duration'))
-                uploader = db.get(Link.videoId == videoId)
-                print (duration.get('uploader'))
+                data = db.get(Link.videoId == videoId)
+                print(data)
+                print('https://www.youtube.com/watch?v=' + data.get('videoId'))
+                print(data.get('title'))
+                print(data.get('thumbnail'))
+                print(data.get('duration'))
+                print(data.get('uploader'))
 
         except IndexError:
             print('List is empty!')
@@ -238,7 +242,7 @@ while True:
         for i in ids:
             db.update(Set('uploader', ''), Link.videoId == i)
 
-    if event == 'Clear':
+    if event == 'clear':
         window['videoFilter'].update('')
         window['links'].update(viewData())
 
