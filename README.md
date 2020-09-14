@@ -19,7 +19,6 @@ Create and manage Youtube playlists using URLs. Useful when creating a playlist 
 
 <h3>Notes</h3>
 
-- <b>Filters do not work yet!</b> </br>
 - Only one playlist is supported at the moment. </br>
   - You can create additional playlists by renaming the db.json file </br>
 - You can add cookies.txt to the application folder to avoid youtube-dl's 429 error when downloading video information
