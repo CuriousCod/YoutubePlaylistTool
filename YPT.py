@@ -10,6 +10,7 @@ import pyperclip
 # DONE Display current random seed
 # TODO File open exception handling
 # TODO Config.ini for default playlist
+# TODO Add confirmation to video delete
 
 sg.theme('Topanga')
 
@@ -90,7 +91,9 @@ col1 = [ # Not in use
 
 layout = [
     [menu_elem],
-    [sg.Listbox(values=viewData(), key='links', size=(130, 36), enable_events=True, right_click_menu=['&Right', ['Copy URL', 'Delete video']])],
+    [sg.Listbox(values=viewData(), key='links', size=(130, 36), enable_events=True,
+                right_click_menu=['&Right', ['Copy URL', 'Open URL', 'Delete video(s)']],
+                select_mode='extended')],
     [sg.Text('Filter', size=(6, 1)),
     sg.In(size=(20, 1), enable_events=True, key='videoFilter'),
     sg.Button('X', key='clear')],
@@ -234,12 +237,26 @@ while True:
         window['links'].update(viewData())
 
     if event == 'Copy URL':
+
+        urls = []
+
+        for i in values['links']:
+            videoId = i[0:11]
+            urls.append('https://www.youtube.com/watch?v=' + videoId)
+            pyperclip.copy('\n'.join(urls))
+
+    if event == 'Open URL':
         videoId = values['links'][0][0:11]
         url = 'https://www.youtube.com/watch?v=' + videoId
-        pyperclip.copy(url)
+        webbrowser.open(url)
 
-    if event == 'Delete video':
-        db.remove(Link.videoId == values['links'][0][0:11])
+    if event == 'Delete video(s)':
+
+        urls = []
+
+        for i in values['links']:
+            db.remove(Link.videoId == i[0:11])
+
         window['links'].update(viewData())
 
     if event == 'Copy':
