@@ -6,12 +6,15 @@ import re, time, random, os, sys, webbrowser
 from os import path
 import pyperclip
 
-# TODO Add total video count
+# DONE Add total video count -> Printed when pressing copy
 # DONE Support for multiple db
 # DONE Display current random seed
 # TODO File open exception handling
 # DONE Config.ini for default playlist
 # DONE Add confirmation to video delete
+# TODO Add recent playlists
+# DONE youtu.be links
+# TODO Tagging
 
 
 def filtering():
@@ -143,6 +146,13 @@ while True:
                             db.insert({'videoId': i[videoId:videoId + 11]
                                        , 'title': '', 'thumbnail': '', 'duration': '', 'uploader': ''})
 
+                    if i.find('https://youtu.be/') != -1:
+                        videoId = i.find('be/') + 3
+
+                        if (db.contains(Link.videoId == i[videoId:videoId + 11])) is False:
+                            db.insert({'videoId': i[videoId:videoId + 11]
+                                       , 'title': '', 'thumbnail': '', 'duration': '', 'uploader': ''})
+
                 window2['input'].update('')
                 window['videos'].update(viewData())
                 window2.close()
@@ -161,21 +171,24 @@ while True:
                 title = title.get('title')
 
                 if title == "":
-                    ydl = youtube_dl.YoutubeDL({'outtmpl': '%(id)s.%(ext)s', 'cookiefile': 'cookies.txt'})
-                    info = ydl.extract_info(values['videos'][0][0:11], download=False)
-                    print(info['title'])
-                    print(info['thumbnail'])
-                    print(info['duration'])
-                    print(info['uploader'])
+                    try:
+                        ydl = youtube_dl.YoutubeDL({'outtmpl': '%(id)s.%(ext)s', 'cookiefile': 'cookies.txt'})
+                        info = ydl.extract_info(values['videos'][0][0:11], download=False)
+                        print(info['title'])
+                        print(info['thumbnail'])
+                        print(info['duration'])
+                        print(info['uploader'])
 
-                    video_duration = str(int(info['duration'] / 60))
-                    video_duration = video_duration + ':' + str(info['duration'] % 60).zfill(2)
+                        video_duration = str(int(info['duration'] / 60))
+                        video_duration = video_duration + ':' + str(info['duration'] % 60).zfill(2)
 
-                    db.update(Set('title', info['title']), Link.videoId == videoId)
-                    db.update(Set('thumbnail', info['thumbnail']), Link.videoId == videoId)
-                    db.update(Set('duration', video_duration), Link.videoId == videoId)
-                    db.update(Set('uploader', info['uploader']), Link.videoId == videoId)
-                    window['videos'].update(viewData())
+                        db.update(Set('title', info['title']), Link.videoId == videoId)
+                        db.update(Set('thumbnail', info['thumbnail']), Link.videoId == videoId)
+                        db.update(Set('duration', video_duration), Link.videoId == videoId)
+                        db.update(Set('uploader', info['uploader']), Link.videoId == videoId)
+                        window['videos'].update(viewData())
+                    except youtube_dl.utils.DownloadError:
+                        print('Unable to download video data')
 
                 data = db.get(Link.videoId == videoId)
                 print(data)
@@ -256,7 +269,7 @@ while True:
             print('https://www.youtube.com/watch?v=' + i[0:11])
 
         pyperclip.copy('\n'.join(urls))
-        print('Copied in original order')
+        print(str(len(urls)) + ' videos copied to clipboard')
 
     if event == 'copy random':
         urls = []
@@ -270,7 +283,7 @@ while True:
         random.shuffle(urls)
 
         pyperclip.copy('\n'.join(urls))
-        print('Copied in random order')
+        print(str(len(urls)) + ' videos copied to clipboard (randomized)')
         print('Seed')
         print(seed)
 
@@ -316,13 +329,16 @@ while True:
 
     if event == 'New playlist':
         currentPlaylist = sg.popup_get_text('Input playlist name')
-        db = TinyDB(currentPlaylist + '.ypl')
-        window['videos'].update(viewData())
-        window.TKroot.title('Youtube Playlist Tool - ' + currentPlaylist)
 
-        f = open('config.ini', 'w', encoding='utf-8')
-        f.writelines(currentPlaylist + '.ypl')
-        f.close()
+        if currentPlaylist is not None:
+
+            db = TinyDB(currentPlaylist + '.ypl')
+            window['videos'].update(viewData())
+            window.TKroot.title('Youtube Playlist Tool - ' + currentPlaylist)
+
+            f = open('config.ini', 'w', encoding='utf-8')
+            f.writelines(currentPlaylist + '.ypl')
+            f.close()
 
     if event == 'About':
         webbrowser.open('https://github.com/CuriousCod/YoutubePlaylistTool/tree/master')
