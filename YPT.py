@@ -12,24 +12,84 @@ import pyperclip
 # TODO File open exception handling
 # DONE Config.ini for default playlist
 # DONE Add confirmation to video delete
-# TODO Add recent playlists
+# TODO Add recent playlists feature
 # DONE youtu.be links
 # TODO Tagging
+# DONE Reorder playlist
+# TODO Fix reordering bugs: Behavior during filtering
 
 
 def filtering():
+
+    #global globalOrder
+    combine = []
+
     videos = db.search((Link.videoId.search(values['videoFilter'], flags=re.IGNORECASE)) |
                        (Link.videoId.search(values['videoFilter'][-11:], flags=re.IGNORECASE)) |  # For youtube URL
                        (Link.title.search(values['videoFilter'], flags=re.IGNORECASE)))
 
-    combine = [i['videoId'] + ' - ' + i['duration'] + ' - ' + i['title'] for i in videos]
+    videoData = [i['videoId'] + ' - ' + i['duration'] + ' - ' + i['title'] for i in videos]
+
+    # Grabbing video order info and formatting it into 0000
+    # This is actually faster than searching through the database for the video order
+    order = [int(i['order']) for i in videos]
+    order = ["%04d" % i for i in order]
+
+    #globalOrder = order
+    #globalOrder.sort()
+    #globalOrder = list(map(int, globalOrder))
+    #globalOrder = list(map(str, globalOrder))
+
+    # Combining formatted ordering into the video list
+    for (item1, item2) in zip(order, videoData):
+        combine.append(item1 + ' - ' + item2)
+
+    # Sorting based on order
+    combine.sort()
+
+    # Remove ordering from display
+    combine = [i[7:] for i in combine]
+
+    window['up'].update(disabled=True)
+    window['down'].update(disabled=True)
 
     return combine
 
 
 def viewData():
 
-    combine = [i['videoId'] + ' - ' + i['duration'] + ' - ' + i['title'] for i in db]
+    #global globalOrder
+    combine = []
+
+    # Get total db entries and sort by order
+    #for i in range(len(db))[1:]:
+     #   x = db.get(Link.order == str(i))
+
+      #  combine.append(x['videoId'] + ' - ' + x['duration'] + ' - ' + x['title'])
+
+    videoData = [i['videoId'] + ' - ' + i['duration'] + ' - ' + i['title'] for i in db]
+
+    # Grabbing video order info and formatting it into 0000
+    # This is actually faster than searching through the database for the video order
+    try:
+        order = [int(i['order']) for i in db]
+        #globalOrder = str(order)
+        order = ["%04d" % i for i in order]
+
+        # Combining formatted ordering into the video list
+        for (item1, item2) in zip(order, videoData):
+            combine.append(item1 + ' - ' + item2)
+
+        # Sorting based on order
+        combine.sort()
+
+        # Remove ordering from display
+        combine = [i[7:] for i in combine]
+
+    # In case of missing video order information run script
+    except KeyError:
+        runScript(2)
+        viewData()
 
     return combine
 
@@ -59,15 +119,29 @@ def extractVideos():
         return playlist
 
 
-def addWindow():
+def CreateWindowLayout(createWindow):
 
-    layout2 = [
-        [sg.Multiline('', key='input', size=(48, 28), focus=True, right_click_menu=['&Right', ['Paste']])],
-        [sg.Button('Extract source', key='add source', size=(18, 2)),
-         sg.Text(size=(16, 1)), sg.Button('Cancel', key='cancel', size=(7, 2)), sg.Button('OK', key='add links', size=(4, 2))]
-    ]
-    return sg.Window('Youtube Playlist Tool - Add Videos', layout2, font='Courier 12', modal=True)
+    if createWindow == 1:
+        layout = [
+            [sg.Multiline('', key='input', size=(48, 28), focus=True, right_click_menu=['&Right', ['Paste']])],
+            [sg.Button('Extract source', key='add source', size=(18, 2)),
+             sg.Text(size=(16, 1)), sg.Button('Cancel', key='cancel', size=(7, 2)), sg.Button('OK', key='add links', size=(4, 2))]
+        ]
+        windowTitle = 'Youtube Playlist Tool - Add Videos'
 
+        return sg.Window(windowTitle, layout, font='Courier 12', modal=True)
+
+# For running db scripts
+def runScript(script):
+
+    ids = [i['videoId'] for i in db]
+    x = 1
+    for i in ids:
+        if script == 1:
+            db.update(Set('uploader', ''), Link.videoId == i)
+        if script == 2:
+            db.update(Set('order', str(x)), Link.videoId == i)
+            x += 1
 
 sg.theme('Topanga')
 
@@ -89,20 +163,20 @@ Link = Query()
 layout = [
     [menu_elem],
     [sg.Listbox(values=viewData(), key='videos', size=(130, 36), enable_events=True,
-                right_click_menu=['&Right', ['Copy URL', 'Open URL', 'Delete video(s)']],
+                right_click_menu=['&Right', ['Copy URL', 'Open URL', 'Change order', 'Delete video(s)']],
                 select_mode='extended')],
     [sg.Text('Filter', size=(6, 1)),
     sg.In(size=(20, 1), enable_events=True, key='videoFilter'),
-    sg.Button('X', key='clear')],
+    sg.Button('X', key='clear'), sg.Text(' Reorder'), sg.Button('↑', key='up'), sg.Button('↓', key='down') ],# sg.Text(' Tags', size=(6, 1))], sg.Multiline(size=(20, 2), enable_events=True, key='tags')],
     [sg.Text('')],
     [sg.Button('Add'),
     sg.Button('Update'),
     sg.Button('Copy'),
-    sg.Button('Copy Random', key='copy random')
+    sg.Button('Copy Random', key='copy random'),
     #sg.Button('Create Playlist', key='create playlist'),
     #sg.Text('', size=(47, 1)),
+    sg.Button('Script') # For running quick db scripts
     ]
-    #sg.Button('Script')] # For running quick db scripts
 ]
 
 global window
@@ -114,7 +188,7 @@ while True:
         break
 
     if event == 'Add':
-        window2 = addWindow()
+        window2 = CreateWindowLayout(1)
         window2.finalize()
 
         while True:
@@ -186,7 +260,12 @@ while True:
                         db.update(Set('thumbnail', info['thumbnail']), Link.videoId == videoId)
                         db.update(Set('duration', video_duration), Link.videoId == videoId)
                         db.update(Set('uploader', info['uploader']), Link.videoId == videoId)
+
+                        vpos = window['videos'].Widget.yview()
+
                         window['videos'].update(viewData())
+                        window['videos'].set_vscroll_position(vpos[0])
+
                     except youtube_dl.utils.DownloadError:
                         print('Unable to download video data')
 
@@ -210,8 +289,9 @@ while True:
             if title == "":
                 missingData.append(i)
 
-        print(str(len(missingData)) + ' videos missing information.')
-        print('Downloading video information...')
+        print(str(len(missingData)) + ' videos missing video information')
+        if len(missingData) > 0:
+            print('Downloading video information...')
 
         for count, i in enumerate(missingData):
             try:
@@ -234,7 +314,10 @@ while True:
             except youtube_dl.utils.DownloadError:
                 print('Unable to download video information!')
 
+        vpos = window['videos'].Widget.yview()
+
         window['videos'].update(viewData())
+        window['videos'].set_vscroll_position(vpos[0])
 
     if event == 'Copy URL':
 
@@ -259,7 +342,10 @@ while True:
             for i in values['videos']:
                 db.remove(Link.videoId == i[0:11])
 
+            vpos = window['videos'].Widget.yview()
+
             window['videos'].update(viewData())
+            window['videos'].set_vscroll_position(vpos[0])
 
     if event == 'Copy':
         urls = []
@@ -299,19 +385,78 @@ while True:
 
     # For running db scripts
     if event == 'Script':
-        ids = [i['videoId'] for i in db]
-        for i in ids:
-            db.update(Set('uploader', ''), Link.videoId == i)
+        runScript()
 
     if event == 'clear':
         window['videoFilter'].update('')
         window['videos'].update(viewData())
+
+    if event == 'up':
+
+        selection = values['videos']
+
+        for i in values['videos']:
+
+            # Current selection
+            x = db.get(Link.videoId == i[0:11])
+
+            # Video above the selection
+            y = db.get(Link.order == str(int(x['order']) - 1))
+            #y = db.get(Link.order == str(globalOrder[globalOrder.index(x['order']) - 1]))
+
+            # Check if video is on the top of the list
+            if y is not None:
+                db.update(Set('order', str(int(x['order']) - 1)), Link.videoId == x['videoId'])
+                db.update(Set('order', str(int(y['order']) + 1)), Link.videoId == y['videoId'])
+                #db.update(Set('order', str(globalOrder[globalOrder.index(x['order'])])), Link.videoId == y['videoId'])
+                #db.update(Set('order', str(globalOrder[globalOrder.index(x['order']) - 1])), Link.videoId == x['videoId'])
+            else:
+                break
+
+        vpos = window['videos'].Widget.yview()
+
+        window['videos'].update(viewData())
+        window['videos'].SetValue(selection)
+        window['videos'].set_vscroll_position(vpos[0])
+        window.refresh()
+
+    if event == 'down':
+
+        selection = values['videos']
+
+        # Reverse the list, when traveling downwards
+        for i in reversed(values['videos']):
+
+            # Current selection
+            x = db.get(Link.videoId == i[0:11])
+
+            # Video below the selection
+            y = db.get(Link.order == str(int(x['order']) + 1))
+            #y = db.get(Link.order == str(globalOrder.index(x['order']) + 1))
+
+            # Check if video is on the bottom of the list
+            if y is not None:
+                db.update(Set('order', str(int(x['order']) + 1)), Link.videoId == x['videoId'])
+                db.update(Set('order', str(int(y['order']) - 1)), Link.videoId == y['videoId'])
+                #db.update(Set('order', str(globalOrder.index(x['order']))), Link.videoId == y['videoId'])
+                #db.update(Set('order', str(globalOrder.index(x['order']) + 1)), Link.videoId == x['videoId'])
+            else:
+                break
+
+        vpos = window['videos'].Widget.yview()
+
+        window['videos'].update(viewData())
+        window['videos'].SetValue(selection)
+        window['videos'].set_vscroll_position(vpos[0])
+        window.refresh()
 
     if event == 'videoFilter':
         if len(values['videoFilter']) > 2:
             window['videos'].update(filtering())
         else:
             window['videos'].update(viewData())
+            window['up'].update(disabled=False)
+            window['down'].update(disabled=False)
 
     if event == 'Open playlist':
         currentPlaylist = sg.popup_get_file('', title='Select Playlist',
