@@ -18,7 +18,7 @@ Create and manage Youtube playlists using URLs. Useful when creating a playlist 
 - List is automatically saved to the defaultPlaylist.ypl file in the application folder
 - You can create new playlists from the File menu
 - Use the arrow buttons to reorder videos
-- Filter searches through videoIds and titles
+- Filter searches through videoIDs and titles
 
 <h3>Notes</h3>
 
