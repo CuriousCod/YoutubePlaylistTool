@@ -160,27 +160,37 @@ else:
 db = TinyDB(currentPlaylist)
 Link = Query()
 
+col1 = [
+    [sg.Text('Filter', size=(6, 1)),
+    sg.In(size=(20, 1), enable_events=True, key='videoFilter'),
+    sg.Button('X', key='clear'), sg.Text(' Reorder'), sg.Button('↑', key='up'), sg.Button('↓', key='down'), sg.Text(' Copy method')],
+    [sg.Text('', size=(46, 1)), sg.Radio('Normal', group_id='method', default=True, key='copy method'), sg.Radio('Randomized', group_id='method')],
+    [sg.Button('Add'),
+    sg.Button('Update'),
+    sg.Button('Copy'), sg.Text('', size=(26, 1), pad=(8, 1)), sg.Radio('List  ', group_id='type', default=True, key='copy type'), sg.Radio('mpv list', group_id='type')]
+]
+
+col2 = [
+
+]
+
 layout = [
     [menu_elem],
     [sg.Listbox(values=viewData(), key='videos', size=(130, 36), enable_events=True,
-                right_click_menu=['&Right', ['Copy URL', 'Open URL', 'Change order', 'Delete video(s)']],
+                right_click_menu=['&Right', ['Copy URL', 'Open URL', 'Delete video(s)']],
                 select_mode='extended')],
-    [sg.Text('Filter', size=(6, 1)),
-    sg.In(size=(20, 1), enable_events=True, key='videoFilter'),
-    sg.Button('X', key='clear'), sg.Text(' Reorder'), sg.Button('↑', key='up'), sg.Button('↓', key='down') ],# sg.Text(' Tags', size=(6, 1))], sg.Multiline(size=(20, 2), enable_events=True, key='tags')],
-    [sg.Text('')],
-    [sg.Button('Add'),
-    sg.Button('Update'),
-    sg.Button('Copy'),
-    sg.Button('Copy Random', key='copy random'),
+    [sg.Column(col1), sg.Column(col2)], # sg.Text(' Tags', size=(6, 1))], sg.Multiline(size=(20, 2), enable_events=True, key='tags')],
+    #[sg.Text('')],
+    [
+    #sg.Button('Copy Random', key='copy random'),
     #sg.Button('Create Playlist', key='create playlist'),
     #sg.Text('', size=(47, 1)),
-    sg.Button('Script') # For running quick db scripts
+    #sg.Button('Script') # For running quick db scripts
     ]
 ]
 
 global window
-window = sg.Window('Youtube Playlist Tool - ' + currentPlaylist[0:-1-3], layout, font='Courier 12', size=(1280, 800)).finalize()
+window = sg.Window('Youtube Playlist Tool - ' + currentPlaylist[0:-1-3], layout, font='Courier 12', size=(1280, 810)).finalize()
 
 while True:
     event, values = window.read()
@@ -213,24 +223,27 @@ while True:
                 print(links)
 
                 for i in links:
+
                     if i.find('https://www.youtube.com/watch?v=') != -1:
                         videoId = i.find('watch?') + 8
 
                         if (db.contains(Link.videoId == i[videoId:videoId + 11])) is False:
                             db.insert({'videoId': i[videoId:videoId + 11]
-                                       , 'title': '', 'thumbnail': '', 'duration': '', 'uploader': ''})
+                                       , 'title': '', 'thumbnail': '', 'duration': '', 'uploader': '',
+                                       'order': str(len(db) + 1)})
 
                     if i.find('https://youtu.be/') != -1:
                         videoId = i.find('be/') + 3
 
                         if (db.contains(Link.videoId == i[videoId:videoId + 11])) is False:
                             db.insert({'videoId': i[videoId:videoId + 11]
-                                       , 'title': '', 'thumbnail': '', 'duration': '', 'uploader': ''})
+                                       , 'title': '', 'thumbnail': '', 'duration': '', 'uploader': '',
+                                       'order': str(len(db) + 1)})
 
                 window2['input'].update('')
                 window['videos'].update(viewData())
-                window2.close()
                 window.refresh()
+                window2.close()
                 break
 
     if event == 'videos':
@@ -348,16 +361,32 @@ while True:
             window['videos'].set_vscroll_position(vpos[0])
 
     if event == 'Copy':
+
         urls = []
 
         for i in filtering():
             urls.append('https://www.youtube.com/watch?v=' + i[0:11])
             print('https://www.youtube.com/watch?v=' + i[0:11])
 
-        pyperclip.copy('\n'.join(urls))
-        print(str(len(urls)) + ' videos copied to clipboard')
+        # Run randomize based on radio button value
+        if values['copy method'] is False:
+            seed = random.randrange(sys.maxsize)
+            random.seed(seed)
+            random.shuffle(urls)
+            print(str(len(urls)) + ' videos copied to clipboard (randomized)')
+            print('Seed')
+            print(seed)
+        else:
+            print(str(len(urls)) + ' videos copied to clipboard')
+
+        if values['copy type'] is True:
+            pyperclip.copy('\n'.join(urls))
+        else:
+            pyperclip.copy(', '.join(urls))
+
 
     if event == 'copy random':
+
         urls = []
 
         for i in filtering():
