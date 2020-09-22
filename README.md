@@ -15,10 +15,12 @@ Create and manage Youtube playlists using URLs. Useful when creating a playlist 
 - To obtain video information press the Update button or click individual video ids on the list (grab a coffee, if you have a lot of videos). </br>
 - Copy buttons copy the displayed list to clipboard (original or random order)
 - You can delete videos from list using mouse right-click
-- List is automatically saved to the db.json file in the application folder
+- List is automatically saved to the defaultPlaylist.ypl file in the application folder
+- You can create new playlists from the File menu
+- Use the arrow buttons to reorder videos
+- Filter searches through videoIDs and titles
 
 <h3>Notes</h3>
 
-- Only one playlist is supported at the moment. </br>
-  - You can create additional playlists by renaming the db.json file </br>
+- You cannot reorder videos while filtering at the moment
 - You can add cookies.txt to the application folder to avoid youtube-dl's 429 error when downloading video information
