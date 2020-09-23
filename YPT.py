@@ -2,7 +2,7 @@ import PySimpleGUI as sg
 from tinydb import TinyDB, Query
 import youtube_dl
 from tinydb.operations import set as Set
-import re, time, random, os, sys, webbrowser
+import re, time, random, os, sys, webbrowser, subprocess
 from os import path
 import pyperclip
 
@@ -170,16 +170,12 @@ col1 = [
     sg.Button('Copy'), sg.Text('', size=(26, 1), pad=(8, 1)), sg.Radio('List  ', group_id='type', default=True, key='copy type'), sg.Radio('mpv list', group_id='type')]
 ]
 
-col2 = [
-
-]
-
 layout = [
     [menu_elem],
     [sg.Listbox(values=viewData(), key='videos', size=(130, 36), enable_events=True,
-                right_click_menu=['&Right', ['Copy URL', 'Open URL', 'Delete video(s)']],
+                right_click_menu=['&Right', ['Copy URL', 'Open URL', 'Play with mpv', 'Delete video(s)']],
                 select_mode='extended')],
-    [sg.Column(col1), sg.Column(col2)], # sg.Text(' Tags', size=(6, 1))], sg.Multiline(size=(20, 2), enable_events=True, key='tags')],
+    [sg.Column(col1)], # sg.Text(' Tags', size=(6, 1))], sg.Multiline(size=(20, 2), enable_events=True, key='tags')],
     #[sg.Text('')],
     [
     #sg.Button('Copy Random', key='copy random'),
@@ -190,7 +186,8 @@ layout = [
 ]
 
 global window
-window = sg.Window('Youtube Playlist Tool - ' + currentPlaylist[0:-1-3], layout, font='Courier 12', size=(1280, 810)).finalize()
+window = sg.Window('Youtube Playlist Tool - ' + currentPlaylist[0:-1-3], layout, font='Courier 12', size=(1280, 810),
+                   resizable=True).finalize()
 
 while True:
     event, values = window.read()
@@ -240,8 +237,11 @@ while True:
                                        , 'title': '', 'thumbnail': '', 'duration': '', 'uploader': '',
                                        'order': str(len(db) + 1)})
 
+                vpos = window['videos'].Widget.yview()
+
                 window2['input'].update('')
                 window['videos'].update(viewData())
+                window['videos'].set_vscroll_position(vpos[0])
                 window.refresh()
                 window2.close()
                 break
@@ -346,6 +346,17 @@ while True:
         url = 'https://www.youtube.com/watch?v=' + videoId
         webbrowser.open(url)
 
+    if event == 'Play with mpv':
+
+        urls = []
+
+        for i in values['videos']:
+            urls.append('https://www.youtube.com/watch?v=' + i[0:11])
+
+        urls = ' '.join(urls)
+
+        subprocess.Popen('mpv --slang=eng,en --fs --fs-screen=2 ' + urls, shell=True)
+
     if event == 'Delete video(s)':
 
         popupInput = sg.popup_yes_no('Delete selected videos?')
@@ -382,11 +393,11 @@ while True:
         if values['copy type'] is True:
             pyperclip.copy('\n'.join(urls))
         else:
-            pyperclip.copy(', '.join(urls))
+            pyperclip.copy(' '.join(urls))
 
 
     if event == 'copy random':
-
+        """
         urls = []
 
         for i in filtering():
@@ -401,6 +412,7 @@ while True:
         print(str(len(urls)) + ' videos copied to clipboard (randomized)')
         print('Seed')
         print(seed)
+        """
 
     # Very limited, not used atm
     if event == 'create playlist':
