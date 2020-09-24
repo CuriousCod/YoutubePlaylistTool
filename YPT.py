@@ -17,6 +17,7 @@ import pyperclip
 # TODO Tagging
 # DONE Reorder playlist
 # TODO Fix reordering bugs: Behavior during filtering
+# TODO Remove copy order commands and switch it to displaying the list in random or default order
 
 
 def filtering():
@@ -33,6 +34,7 @@ def filtering():
     # Grabbing video order info and formatting it into 0000
     # This is actually faster than searching through the database for the video order
     order = [int(i['order']) for i in videos]
+    #random.shuffle(order)
     order = ["%04d" % i for i in order]
 
     #globalOrder = order
@@ -74,6 +76,7 @@ def viewData():
     try:
         order = [int(i['order']) for i in db]
         #globalOrder = str(order)
+        #random.shuffle(order)
         order = ["%04d" % i for i in order]
 
         # Combining formatted ordering into the video list
@@ -146,6 +149,7 @@ def runScript(script):
 sg.theme('Topanga')
 
 menu_def = [['File', ['Open playlist', 'New playlist', 'Exit']],
+            ['Settings', ['mpv arguments']],
             ['Help', 'About'], ]
 
 menu_elem = sg.Menu(menu_def)
@@ -159,6 +163,7 @@ else:
 
 db = TinyDB(currentPlaylist)
 Link = Query()
+mpvArg = '--slang=eng,en --fs --fs-screen=2 --sub-font-size=46'
 
 col1 = [
     [sg.Text('Filter', size=(6, 1)),
@@ -223,19 +228,25 @@ while True:
 
                     if i.find('https://www.youtube.com/watch?v=') != -1:
                         videoId = i.find('watch?') + 8
+                        videoId = i[videoId:videoId + 11]
 
-                        if (db.contains(Link.videoId == i[videoId:videoId + 11])) is False:
-                            db.insert({'videoId': i[videoId:videoId + 11]
-                                       , 'title': '', 'thumbnail': '', 'duration': '', 'uploader': '',
-                                       'order': str(len(db) + 1)})
+                        if videoId.find(' ') == -1 and len(videoId) == 11:
+
+                            if (db.contains(Link.videoId == videoId)) is False:
+                                db.insert({'videoId': i[videoId:videoId + 11]
+                                           , 'title': '', 'thumbnail': '', 'duration': '', 'uploader': '',
+                                           'order': str(len(db) + 1)})
 
                     if i.find('https://youtu.be/') != -1:
                         videoId = i.find('be/') + 3
+                        videoId = i[videoId:videoId + 11]
 
-                        if (db.contains(Link.videoId == i[videoId:videoId + 11])) is False:
-                            db.insert({'videoId': i[videoId:videoId + 11]
-                                       , 'title': '', 'thumbnail': '', 'duration': '', 'uploader': '',
-                                       'order': str(len(db) + 1)})
+                        if videoId.find(' ') == -1 and len(videoId) == 11:
+
+                            if (db.contains(Link.videoId == videoId)) is False:
+                                db.insert({'videoId': i[videoId:videoId + 11]
+                                           , 'title': '', 'thumbnail': '', 'duration': '', 'uploader': '',
+                                           'order': str(len(db) + 1)})
 
                 vpos = window['videos'].Widget.yview()
 
@@ -255,40 +266,44 @@ while True:
                 print(videoId)
 
                 title = db.get(Link.videoId == videoId)
-                title = title.get('title')
+                try:
+                    title = title.get('title')
 
-                if title == "":
-                    try:
-                        ydl = youtube_dl.YoutubeDL({'outtmpl': '%(id)s.%(ext)s', 'cookiefile': 'cookies.txt'})
-                        info = ydl.extract_info(values['videos'][0][0:11], download=False)
-                        print(info['title'])
-                        print(info['thumbnail'])
-                        print(info['duration'])
-                        print(info['uploader'])
+                    if title == "":
+                        try:
+                            ydl = youtube_dl.YoutubeDL({'outtmpl': '%(id)s.%(ext)s', 'cookiefile': 'cookies.txt'})
+                            info = ydl.extract_info(values['videos'][0][0:11], download=False)
+                            print(info['title'])
+                            print(info['thumbnail'])
+                            print(info['duration'])
+                            print(info['uploader'])
 
-                        video_duration = str(int(info['duration'] / 60))
-                        video_duration = video_duration + ':' + str(info['duration'] % 60).zfill(2)
+                            video_duration = str(int(info['duration'] / 60))
+                            video_duration = video_duration + ':' + str(info['duration'] % 60).zfill(2)
 
-                        db.update(Set('title', info['title']), Link.videoId == videoId)
-                        db.update(Set('thumbnail', info['thumbnail']), Link.videoId == videoId)
-                        db.update(Set('duration', video_duration), Link.videoId == videoId)
-                        db.update(Set('uploader', info['uploader']), Link.videoId == videoId)
+                            db.update(Set('title', info['title']), Link.videoId == videoId)
+                            db.update(Set('thumbnail', info['thumbnail']), Link.videoId == videoId)
+                            db.update(Set('duration', video_duration), Link.videoId == videoId)
+                            db.update(Set('uploader', info['uploader']), Link.videoId == videoId)
 
-                        vpos = window['videos'].Widget.yview()
+                            vpos = window['videos'].Widget.yview()
 
-                        window['videos'].update(viewData())
-                        window['videos'].set_vscroll_position(vpos[0])
+                            window['videos'].update(viewData())
+                            window['videos'].set_vscroll_position(vpos[0])
 
-                    except youtube_dl.utils.DownloadError:
-                        print('Unable to download video data')
+                        except youtube_dl.utils.DownloadError:
+                            print('Unable to download video data')
 
-                data = db.get(Link.videoId == videoId)
-                print(data)
-                print('https://www.youtube.com/watch?v=' + data.get('videoId'))
-                print(data.get('title'))
-                print(data.get('thumbnail'))
-                print(data.get('duration'))
-                print(data.get('uploader'))
+                    data = db.get(Link.videoId == videoId)
+                    print(data)
+                    print('https://www.youtube.com/watch?v=' + data.get('videoId'))
+                    print(data.get('title'))
+                    print(data.get('thumbnail'))
+                    print(data.get('duration'))
+                    print(data.get('uploader'))
+
+                except AttributeError:
+                    print('Unable to find db entry')
 
         except IndexError:
             print('List is empty!')
@@ -355,7 +370,7 @@ while True:
 
         urls = ' '.join(urls)
 
-        subprocess.Popen('mpv --slang=eng,en --fs --fs-screen=2 ' + urls, shell=True)
+        subprocess.Popen('mpv ' + mpvArg + ' ' + urls, shell=True)
 
     if event == 'Delete video(s)':
 
@@ -364,7 +379,7 @@ while True:
             urls = []
 
             for i in values['videos']:
-                db.remove(Link.videoId == i[0:11])
+                db.remove(Link.videoId == i[0:i.find(' ')])
 
             vpos = window['videos'].Widget.yview()
 
@@ -525,6 +540,9 @@ while True:
             f = open('config.ini', 'w', encoding='utf-8')
             f.writelines(currentPlaylist + '.ypl')
             f.close()
+
+    if event == 'mpv arguments':
+        mpvArg = sg.popup_get_text('Input mpv launch arguments', default_text=mpvArg)
 
     if event == 'About':
         webbrowser.open('https://github.com/CuriousCod/YoutubePlaylistTool/tree/master')
