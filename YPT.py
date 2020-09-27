@@ -18,6 +18,7 @@ import pyperclip
 # DONE Reorder playlist
 # TODO Fix reordering bugs: Behavior during filtering
 # TODO Remove copy order commands and switch it to displaying the list in random or default order
+# TODO What to do with deleted video order numbers
 
 
 def filtering():
@@ -34,7 +35,10 @@ def filtering():
     # Grabbing video order info and formatting it into 0000
     # This is actually faster than searching through the database for the video order
     order = [int(i['order']) for i in videos]
-    #random.shuffle(order)
+
+    if shufflePlaylist is True:
+        random.shuffle(order)
+
     order = ["%04d" % i for i in order]
 
     #globalOrder = order
@@ -76,7 +80,10 @@ def viewData():
     try:
         order = [int(i['order']) for i in db]
         #globalOrder = str(order)
-        #random.shuffle(order)
+
+        if shufflePlaylist is True:
+            random.shuffle(order)
+
         order = ["%04d" % i for i in order]
 
         # Combining formatted ordering into the video list
@@ -126,13 +133,13 @@ def CreateWindowLayout(createWindow):
 
     if createWindow == 1:
         layout = [
-            [sg.Multiline('', key='input', size=(48, 28), focus=True, right_click_menu=['&Right', ['Paste']])],
+            [sg.Multiline('', key='input', size=(48, 28), enable_events=True, focus=True, right_click_menu=['&Right', ['Paste']])],
             [sg.Button('Extract source', key='add source', size=(18, 2)),
              sg.Text(size=(16, 1)), sg.Button('Cancel', key='cancel', size=(7, 2)), sg.Button('OK', key='add links', size=(4, 2))]
         ]
         windowTitle = 'Youtube Playlist Tool - Add Videos'
 
-        return sg.Window(windowTitle, layout, font='Courier 12', modal=True)
+        return sg.Window(windowTitle, layout, font='Courier 12', modal=True, icon='logo.ico')
 
 # For running db scripts
 def runScript(script):
@@ -149,7 +156,7 @@ def runScript(script):
 sg.theme('Topanga')
 
 menu_def = [['File', ['Open playlist', 'New playlist', 'Exit']],
-            ['Settings', ['mpv arguments']],
+            ['Settings', ['mpv arguments', 'Shuffle playlist']],
             ['Help', 'About'], ]
 
 menu_elem = sg.Menu(menu_def)
@@ -164,14 +171,19 @@ else:
 db = TinyDB(currentPlaylist)
 Link = Query()
 mpvArg = '--slang=eng,en --fs --fs-screen=2 --sub-font-size=46'
+windowSize = (1280, 810)
+
+global shufflePlaylist
+shufflePlaylist = False
 
 col1 = [
     [sg.Text('Filter', size=(6, 1)),
     sg.In(size=(20, 1), enable_events=True, key='videoFilter'),
     sg.Button('X', key='clear'), sg.Text(' Reorder'), sg.Button('↑', key='up'), sg.Button('↓', key='down'), sg.Text(' Copy method')],
-    [sg.Text('', size=(46, 1)), sg.Radio('Normal', group_id='method', default=True, key='copy method'), sg.Radio('Randomized', group_id='method')],
+    [sg.Text('', size=(46, 1)), sg.Radio('Normal', group_id='method', default=True, key='copy method'), sg.Radio('Shuffled', group_id='method')],
     [sg.Button('Add'),
     sg.Button('Update'),
+    #sg.Button('Create Playlist', key='create playlist'),
     sg.Button('Copy'), sg.Text('', size=(26, 1), pad=(8, 1)), sg.Radio('List  ', group_id='type', default=True, key='copy type'), sg.Radio('mpv list', group_id='type')]
 ]
 
@@ -184,15 +196,14 @@ layout = [
     #[sg.Text('')],
     [
     #sg.Button('Copy Random', key='copy random'),
-    #sg.Button('Create Playlist', key='create playlist'),
     #sg.Text('', size=(47, 1)),
     #sg.Button('Script') # For running quick db scripts
     ]
 ]
 
 global window
-window = sg.Window('Youtube Playlist Tool - ' + currentPlaylist[0:-1-3], layout, font='Courier 12', size=(1280, 810),
-                   resizable=True).finalize()
+window = sg.Window('Youtube Playlist Tool - ' + currentPlaylist[0:-1-3], layout, font='Courier 12', size=(windowSize),
+                   resizable=True, icon='logo.ico').finalize()
 
 while True:
     event, values = window.read()
@@ -220,6 +231,11 @@ while True:
             if event == 'Paste':
                 window2['input'].update(pyperclip.paste())
 
+            if event == 'input':
+                if values['input'].find('html') != -1:
+                    window2['input'].update('')
+                    window2['input'].update('\n'.join(extractVideos()))
+
             if event == 'add links':
                 links = values['input'].split('\n')
                 print(links)
@@ -233,7 +249,7 @@ while True:
                         if videoId.find(' ') == -1 and len(videoId) == 11:
 
                             if (db.contains(Link.videoId == videoId)) is False:
-                                db.insert({'videoId': i[videoId:videoId + 11]
+                                db.insert({'videoId': videoId
                                            , 'title': '', 'thumbnail': '', 'duration': '', 'uploader': '',
                                            'order': str(len(db) + 1)})
 
@@ -244,7 +260,7 @@ while True:
                         if videoId.find(' ') == -1 and len(videoId) == 11:
 
                             if (db.contains(Link.videoId == videoId)) is False:
-                                db.insert({'videoId': i[videoId:videoId + 11]
+                                db.insert({'videoId': videoId
                                            , 'title': '', 'thumbnail': '', 'duration': '', 'uploader': '',
                                            'order': str(len(db) + 1)})
 
@@ -357,9 +373,11 @@ while True:
             pyperclip.copy('\n'.join(urls))
 
     if event == 'Open URL':
-        videoId = values['videos'][0][0:11]
-        url = 'https://www.youtube.com/watch?v=' + videoId
-        webbrowser.open(url)
+
+        if values['videos']:
+            videoId = values['videos'][0][0:11]
+            url = 'https://www.youtube.com/watch?v=' + videoId
+            webbrowser.open(url)
 
     if event == 'Play with mpv':
 
@@ -374,17 +392,18 @@ while True:
 
     if event == 'Delete video(s)':
 
-        popupInput = sg.popup_yes_no('Delete selected videos?')
-        if popupInput == 'Yes':
-            urls = []
+        if values['videos']:
+            popupInput = sg.popup_yes_no('Delete selected videos?')
+            if popupInput == 'Yes':
+                urls = []
 
-            for i in values['videos']:
-                db.remove(Link.videoId == i[0:i.find(' ')])
+                for i in values['videos']:
+                    db.remove(Link.videoId == i[0:i.find(' ')])
 
-            vpos = window['videos'].Widget.yview()
+                vpos = window['videos'].Widget.yview()
 
-            window['videos'].update(viewData())
-            window['videos'].set_vscroll_position(vpos[0])
+                window['videos'].update(viewData())
+                window['videos'].set_vscroll_position(vpos[0])
 
     if event == 'Copy':
 
@@ -394,12 +413,12 @@ while True:
             urls.append('https://www.youtube.com/watch?v=' + i[0:11])
             print('https://www.youtube.com/watch?v=' + i[0:11])
 
-        # Run randomize based on radio button value
+        # Run shuffle based on radio button value
         if values['copy method'] is False:
             seed = random.randrange(sys.maxsize)
             random.seed(seed)
             random.shuffle(urls)
-            print(str(len(urls)) + ' videos copied to clipboard (randomized)')
+            print(str(len(urls)) + ' videos copied to clipboard (shuffled)')
             print('Seed')
             print(seed)
         else:
@@ -446,6 +465,8 @@ while True:
     if event == 'clear':
         window['videoFilter'].update('')
         window['videos'].update(viewData())
+        window['up'].update(disabled=False)
+        window['down'].update(disabled=False)
 
     if event == 'up':
 
@@ -544,7 +565,20 @@ while True:
     if event == 'mpv arguments':
         mpvArg = sg.popup_get_text('Input mpv launch arguments', default_text=mpvArg)
 
+    if event == 'Shuffle playlist':
+        shufflePlaylist = True
+        window['videos'].update(filtering())
+        shufflePlaylist = False
+
     if event == 'About':
         webbrowser.open('https://github.com/CuriousCod/YoutubePlaylistTool/tree/master')
+
+    if windowSize != window.size:
+        print(window.size)
+        CurrentWindowSize = window.size
+        VideosElementSize = (int(CurrentWindowSize[0] * 0.1), int(CurrentWindowSize[1] * 0.044))
+        print(VideosElementSize)
+        window['videos'].set_size(VideosElementSize)
+        windowSize = window.size
 
 window.close()
