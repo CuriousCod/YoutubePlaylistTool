@@ -19,6 +19,7 @@ import pyperclip
 # TODO Fix reordering bugs: Behavior during filtering
 # TODO Remove copy order commands and switch it to displaying the list in random or default order
 # TODO What to do with deleted video order numbers
+# TODO Source file grabbing with Chrome, makes last line garbage
 
 
 def filtering():
@@ -109,7 +110,7 @@ def extractVideos():
     print(text.find('\"playlist\":'))
     print(text.rfind('\"playlistEditEndpoint\"'))
 
-    text = text[text.find('\"playlist\":'):text.rfind('\"Save playlist\"')]
+    text = text[text.find('\"playlist\":'):text.rfind('\"toggledAccessibilityData\"')]
     links = []
 
     # Grab all unique matches with the key VideoId and add them to the list
