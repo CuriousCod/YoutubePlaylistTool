@@ -5,10 +5,10 @@ Create and manage Youtube playlists using URLs. Useful when creating a playlist 
 
 <h3>Adding videos</h3>
 
-- Press Add button in application to open the input window </br>
+- Press Add button in the application to open the input window </br>
 - Paste Youtube URLs to the list in this format: www.youtube.com/watch?v= </br>
-  - You can also add a playlist by copying a playlist's source code to clipboard and pressing Add Source button </br>
-- Press Add Links button
+  - You can also add a playlist by copying a playlist's source code to clipboard and pressing Extract Source button </br>
+- Press OK
 
 <h3>Managing videos</h3>
 
@@ -23,4 +23,5 @@ Create and manage Youtube playlists using URLs. Useful when creating a playlist 
 <h3>Notes</h3>
 
 - You cannot reorder videos while filtering at the moment
+- By adding mpv folder to environment variables, you can play videos directly from the application (use right click on a video)
 - You can add cookies.txt to the application folder to avoid youtube-dl's 429 error when downloading video information
