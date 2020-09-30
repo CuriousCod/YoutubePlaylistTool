@@ -164,14 +164,20 @@ menu_elem = sg.Menu(menu_def)
 
 if path.exists('config.ini'):
     f = open('config.ini', 'r', encoding='utf-8')
-    currentPlaylist = f.read()
+    currentPlaylist = f.readline().rstrip('\n')
+    mpvArg = f.readline()
+    if mpvArg == '':
+        mpvArg = '--slang=eng,en --fs --fs-screen=2 --sub-font-size=46'
     f.close()
 else:
     currentPlaylist = 'defaultPlaylist.ypl'
+    mpvArg = '--slang=eng,en --fs --fs-screen=2 --sub-font-size=46'
+    f = open('config.ini', 'w', encoding='utf-8')
+    f.writelines([currentPlaylist, '\n', mpvArg])
+    f.close()
 
 db = TinyDB(currentPlaylist)
 Link = Query()
-mpvArg = '--slang=eng,en --fs --fs-screen=2 --sub-font-size=46'
 windowSize = (1280, 810)
 
 global shufflePlaylist
@@ -400,7 +406,7 @@ while True:
 
                 for i in values['videos']:
 
-                    # Reorder videos
+                    # Reorder videos, not the most efficient way to do this
                     videoOrder = db.get(Link.videoId == i[0:i.find(' ')])
                     videoOrder = int(videoOrder['order'])
                     for x in range(len(db) - videoOrder - 1):
@@ -471,8 +477,11 @@ while True:
         runScript(2)
 
     if event == 'clear':
+        vpos = window['videos'].Widget.yview()
+
         window['videoFilter'].update('')
         window['videos'].update(viewData())
+        window['videos'].set_vscroll_position(vpos[0])
         window['up'].update(disabled=False)
         window['down'].update(disabled=False)
 
@@ -553,9 +562,8 @@ while True:
             window['videos'].update(viewData())
             window.TKroot.title('Youtube Playlist Tool - ' + currentPlaylist[currentPlaylist.rfind('/') + 1:-1-3])
 
-            f = open('config.ini', 'w', encoding='utf-8')
-            f.writelines(currentPlaylist[currentPlaylist.rfind('/') + 1:])
-            f.close()
+            with open('config.ini', 'w', encoding='utf8') as f:
+                f.writelines([currentPlaylist[currentPlaylist.rfind('/') + 1:], '\n', mpvArg])
 
     if event == 'New playlist':
         currentPlaylist = sg.popup_get_text('Input playlist name')
@@ -566,12 +574,17 @@ while True:
             window['videos'].update(viewData())
             window.TKroot.title('Youtube Playlist Tool - ' + currentPlaylist)
 
-            f = open('config.ini', 'w', encoding='utf-8')
-            f.writelines(currentPlaylist + '.ypl')
-            f.close()
+            with open('config.ini', 'w', encoding='utf8') as f:
+                f.writelines([currentPlaylist + '.ypl', '\n', mpvArg])
 
     if event == 'mpv arguments':
         mpvArg = sg.popup_get_text('Input mpv launch arguments', default_text=mpvArg)
+
+        if mpvArg is not None:
+            with open('config.ini', 'w', encoding='utf8') as f:
+                f.writelines([currentPlaylist, '\n', mpvArg])
+        else:
+            mpvArg = ''
 
     if event == 'Shuffle playlist':
         shufflePlaylist = True
