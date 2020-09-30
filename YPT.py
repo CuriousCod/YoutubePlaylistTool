@@ -18,8 +18,8 @@ import pyperclip
 # DONE Reorder playlist
 # TODO Fix reordering bugs: Behavior during filtering
 # TODO Remove copy order commands and switch it to displaying the list in random or default order
-# TODO What to do with deleted video order numbers
-# TODO Source file grabbing with Chrome, makes last line garbage
+# DONE What to do with deleted video order numbers -> Reorder
+# DONE Source file grabbing with Chrome, makes last line garbage -> Culture
 
 
 def filtering():
@@ -185,7 +185,8 @@ col1 = [
     [sg.Button('Add'),
     sg.Button('Update'),
     #sg.Button('Create Playlist', key='create playlist'),
-    sg.Button('Copy'), sg.Text('', size=(26, 1), pad=(8, 1)), sg.Radio('List  ', group_id='type', default=True, key='copy type'), sg.Radio('mpv list', group_id='type')]
+    sg.Button('Copy'), sg.Text('', size=(26, 1), pad=(8, 1)), sg.Radio('List  ', group_id='type', default=True, key='copy type'), sg.Radio('mpv list', group_id='type')],
+    #[sg.Button('Script')]  # For running quick db scripts
 ]
 
 layout = [
@@ -198,7 +199,6 @@ layout = [
     [
     #sg.Button('Copy Random', key='copy random'),
     #sg.Text('', size=(47, 1)),
-    #sg.Button('Script') # For running quick db scripts
     ]
 ]
 
@@ -399,6 +399,13 @@ while True:
                 urls = []
 
                 for i in values['videos']:
+
+                    # Reorder videos
+                    videoOrder = db.get(Link.videoId == i[0:i.find(' ')])
+                    videoOrder = int(videoOrder['order'])
+                    for x in range(len(db) - videoOrder - 1):
+                        db.update(Set('order', str(videoOrder + x)), Link.order == str(videoOrder + x + 1))
+
                     db.remove(Link.videoId == i[0:i.find(' ')])
 
                 vpos = window['videos'].Widget.yview()
@@ -461,7 +468,7 @@ while True:
 
     # For running db scripts
     if event == 'Script':
-        runScript()
+        runScript(2)
 
     if event == 'clear':
         window['videoFilter'].update('')
