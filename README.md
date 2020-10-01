@@ -22,3 +22,4 @@ Create and manage Youtube playlists using URLs. Useful when creating a playlist 
 - By adding mpv folder to path environment variable, you can play videos directly from the application assuming you have youtube-dl installed to mpv
   -  To play, press mouse right click on a video
 - You can add cookies.txt to the application folder to avoid youtube-dl's 429 error when downloading video information
+- Releases are compiled as .exe with pyinstaller, this often causes anti-virus programs to go crazy
