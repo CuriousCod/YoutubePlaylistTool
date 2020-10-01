@@ -1,5 +1,5 @@
 # YoutubePlaylistTool
-Create and manage Youtube playlists using URLs. Useful when creating a playlist for some video players, for example mpv (https://mpv.io).
+Create, manage and play Youtube playlists using URLs. Optimized to playback videos with mpv (https://mpv.io).
 
 <h3>Adding videos</h3>
 
