@@ -1,13 +1,11 @@
 # YoutubePlaylistTool
 Create and manage Youtube playlists using URLs. Useful when creating a playlist for some video players, for example mpv (https://mpv.io).
 
-<b>Work in progress</b>
-
 <h3>Adding videos</h3>
 
-- Press Add button in the application to open the input window </br>
-- Paste Youtube URLs to the list in this format: www.youtube.com/watch?v= </br>
-  - You can also add a playlist by copying a playlist's source code to clipboard and pressing Extract Source button </br>
+- Press Add button to open the input window </br>
+- Paste Youtube URLs to the list in this format: www.youtube.com/watch?v=[videoId] or https://youtu.be/[videoId] </br>
+  - You can also add a playlist by copying a playlist's source code to clipboard and pressing Extract Source button or by pasting it to the textbox </br>
 - Press OK
 
 <h3>Managing videos</h3>
@@ -22,6 +20,6 @@ Create and manage Youtube playlists using URLs. Useful when creating a playlist 
 
 <h3>Notes</h3>
 
-- You cannot reorder videos while filtering at the moment
-- By adding mpv folder to environment variables, you can play videos directly from the application (use right click on a video)
+- By adding mpv folder to path environment variable, you can play videos directly from the application assuming you have youtube-dl installed to mpv
+  -  To play, press mouse right click on a video
 - You can add cookies.txt to the application folder to avoid youtube-dl's 429 error when downloading video information
