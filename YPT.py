@@ -16,7 +16,7 @@ import pyperclip
 # DONE youtu.be links
 # TODO Tagging
 # DONE Reorder playlist
-# TODO Fix reordering bugs: Behavior during filtering
+# DONE Fix reordering bugs: Behavior during filtering
 # TODO Remove copy order commands and switch it to displaying the list in random or default order
 # DONE What to do with deleted video order numbers -> Reorder
 # DONE Source file grabbing with Chrome, makes last line garbage -> Culture
@@ -24,7 +24,7 @@ import pyperclip
 
 def filtering():
 
-    #global globalOrder
+    global globalOrder
     combine = []
 
     videos = db.search((Link.videoId.search(values['videoFilter'], flags=re.IGNORECASE)) |
@@ -40,16 +40,16 @@ def filtering():
     if shufflePlaylist is True:
         random.shuffle(order)
 
+    # Format to 0000
     order = ["%04d" % i for i in order]
 
-    #globalOrder = order
-    #globalOrder.sort()
-    #globalOrder = list(map(int, globalOrder))
-    #globalOrder = list(map(str, globalOrder))
+    # Combining formatted ordering into the video list, old solution
+#    for (item1, item2) in zip(order, videoData):
+#        combine.append(item1 + ' - ' + item2)
 
     # Combining formatted ordering into the video list
-    for (item1, item2) in zip(order, videoData):
-        combine.append(item1 + ' - ' + item2)
+    for x in range(len(order)):
+        combine.append(order[x] + ' - ' + videoData[x])
 
     # Sorting based on order
     combine.sort()
@@ -57,18 +57,25 @@ def filtering():
     # Remove ordering from display
     combine = [i[7:] for i in combine]
 
-    window['up'].update(disabled=True)
-    window['down'].update(disabled=True)
+    #window['up'].update(disabled=True)
+    #window['down'].update(disabled=True)
+
+    # List variable for reordering purposes
+    # For some reason .sort() also affects the order list <_<
+    globalOrder = order
+    globalOrder.sort()
+    globalOrder = list(map(int, globalOrder))
+    globalOrder = list(map(str, globalOrder))
 
     return combine
 
 
 def viewData():
 
-    #global globalOrder
+    global globalOrder
     combine = []
 
-    # Get total db entries and sort by order
+    # Get total db entries and sort by order, this is slow
     #for i in range(len(db))[1:]:
      #   x = db.get(Link.order == str(i))
 
@@ -80,22 +87,29 @@ def viewData():
     # This is actually faster than searching through the database for the video order
     try:
         order = [int(i['order']) for i in db]
-        #globalOrder = str(order)
 
         if shufflePlaylist is True:
             random.shuffle(order)
 
+        # Format to 0000
         order = ["%04d" % i for i in order]
 
         # Combining formatted ordering into the video list
         for (item1, item2) in zip(order, videoData):
             combine.append(item1 + ' - ' + item2)
 
-        # Sorting based on order
+        # Sorting videos based on order
         combine.sort()
 
         # Remove ordering from display
         combine = [i[7:] for i in combine]
+
+        # List variable for reordering purposes
+        # For some reason .sort() also affects the order list <_<
+        globalOrder = order
+        globalOrder.sort()
+        globalOrder = list(map(int, globalOrder))
+        globalOrder = list(map(str, globalOrder))
 
     # In case of missing video order information run script
     except KeyError:
@@ -416,7 +430,7 @@ while True:
 
                 vpos = window['videos'].Widget.yview()
 
-                window['videos'].update(viewData())
+                window['videos'].update(filtering())
                 window['videos'].set_vscroll_position(vpos[0])
 
     if event == 'Copy':
@@ -495,21 +509,22 @@ while True:
             x = db.get(Link.videoId == i[0:11])
 
             # Video above the selection
-            y = db.get(Link.order == str(int(x['order']) - 1))
-            #y = db.get(Link.order == str(globalOrder[globalOrder.index(x['order']) - 1]))
+            #y = db.get(Link.order == str(int(x['order']) - 1))
+            y = db.get(Link.order == str(globalOrder[globalOrder.index(x['order']) - 1]))
 
             # Check if video is on the top of the list
-            if y is not None:
-                db.update(Set('order', str(int(x['order']) - 1)), Link.videoId == x['videoId'])
-                db.update(Set('order', str(int(y['order']) + 1)), Link.videoId == y['videoId'])
-                #db.update(Set('order', str(globalOrder[globalOrder.index(x['order'])])), Link.videoId == y['videoId'])
-                #db.update(Set('order', str(globalOrder[globalOrder.index(x['order']) - 1])), Link.videoId == x['videoId'])
-            else:
-                break
+            #if y is not None:
+            if globalOrder.index(x['order']) != 0:
+                #db.update(Set('order', str(int(x['order']) - 1)), Link.videoId == x['videoId'])
+                #db.update(Set('order', str(int(y['order']) + 1)), Link.videoId == y['videoId'])
+                db.update(Set('order', str(globalOrder[globalOrder.index(x['order'])])), Link.videoId == y['videoId'])
+                db.update(Set('order', str(globalOrder[globalOrder.index(x['order']) - 1])), Link.videoId == x['videoId'])
+            #else:
+                #break
 
         vpos = window['videos'].Widget.yview()
 
-        window['videos'].update(viewData())
+        window['videos'].update(filtering())
         window['videos'].SetValue(selection)
         window['videos'].set_vscroll_position(vpos[0])
         window.refresh()
@@ -525,21 +540,26 @@ while True:
             x = db.get(Link.videoId == i[0:11])
 
             # Video below the selection
-            y = db.get(Link.order == str(int(x['order']) + 1))
-            #y = db.get(Link.order == str(globalOrder.index(x['order']) + 1))
+            #y = db.get(Link.order == str(int(x['order']) + 1))
+            try:
+                y = db.get(Link.order == str(globalOrder[globalOrder.index(x['order']) + 1]))
 
-            # Check if video is on the bottom of the list
-            if y is not None:
-                db.update(Set('order', str(int(x['order']) + 1)), Link.videoId == x['videoId'])
-                db.update(Set('order', str(int(y['order']) - 1)), Link.videoId == y['videoId'])
-                #db.update(Set('order', str(globalOrder.index(x['order']))), Link.videoId == y['videoId'])
-                #db.update(Set('order', str(globalOrder.index(x['order']) + 1)), Link.videoId == x['videoId'])
-            else:
-                break
+                # Old way to check if video is on the bottom of the list, doesn't actually do anything atm
+                if y is not None:
+                    #db.update(Set('order', str(int(x['order']) + 1)), Link.videoId == x['videoId'])
+                    #db.update(Set('order', str(int(y['order']) - 1)), Link.videoId == y['videoId'])
+                    db.update(Set('order', str(globalOrder[globalOrder.index(x['order'])])), Link.videoId == y['videoId'])
+                    db.update(Set('order', str(globalOrder[globalOrder.index(x['order']) + 1])), Link.videoId == x['videoId'])
+                #else:
+                 #   break
+
+            # When at the bottom of the list, interestingly this exception this doesn't occur on the top of the list
+            except IndexError:
+                continue
 
         vpos = window['videos'].Widget.yview()
 
-        window['videos'].update(viewData())
+        window['videos'].update(filtering())
         window['videos'].SetValue(selection)
         window['videos'].set_vscroll_position(vpos[0])
         window.refresh()
@@ -562,7 +582,7 @@ while True:
             window['videos'].update(viewData())
             window.TKroot.title('Youtube Playlist Tool - ' + currentPlaylist[currentPlaylist.rfind('/') + 1:-1-3])
 
-            with open('config.ini', 'w', encoding='utf8') as f:
+            with open('config.ini', 'w', encoding='utf-8') as f:
                 f.writelines([currentPlaylist[currentPlaylist.rfind('/') + 1:], '\n', mpvArg])
 
     if event == 'New playlist':
@@ -574,14 +594,14 @@ while True:
             window['videos'].update(viewData())
             window.TKroot.title('Youtube Playlist Tool - ' + currentPlaylist)
 
-            with open('config.ini', 'w', encoding='utf8') as f:
+            with open('config.ini', 'w', encoding='utf-8') as f:
                 f.writelines([currentPlaylist + '.ypl', '\n', mpvArg])
 
     if event == 'mpv arguments':
         mpvArg = sg.popup_get_text('Input mpv launch arguments', default_text=mpvArg)
 
         if mpvArg is not None:
-            with open('config.ini', 'w', encoding='utf8') as f:
+            with open('config.ini', 'w', encoding='utf-8') as f:
                 f.writelines([currentPlaylist, '\n', mpvArg])
         else:
             mpvArg = ''
