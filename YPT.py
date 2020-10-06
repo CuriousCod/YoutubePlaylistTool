@@ -9,7 +9,7 @@ import pyperclip
 # DONE Add total video count -> Printed when pressing copy
 # DONE Support for multiple db
 # DONE Display current random seed
-# TODO File open exception handling
+# DONE File open exception handling
 # DONE Config.ini for default playlist
 # DONE Add confirmation to video delete
 # TODO Add recent playlists feature
@@ -20,6 +20,7 @@ import pyperclip
 # TODO Remove copy order commands and switch it to displaying the list in random or default order
 # DONE What to do with deleted video order numbers -> Reorder
 # DONE Source file grabbing with Chrome, makes last line garbage -> Culture
+# TODO More dynamic playlist filepath
 
 
 def filtering():
@@ -168,29 +169,52 @@ def runScript(script):
             db.update(Set('order', str(x)), Link.videoId == i)
             x += 1
 
+
+# Open playlist db
+def openPlaylist():
+
+    global currentPlaylist, mpvArg, db
+
+    # Check config.ini for playlist name
+    if path.exists('config.ini'):
+        f = open('config.ini', 'r', encoding='utf-8')
+        currentPlaylist = f.readline().rstrip('\n')
+        mpvArg = f.readline()
+        if mpvArg == '':
+            mpvArg = '--slang=eng,en --fs --fs-screen=2 --sub-font-size=46'
+        f.close()
+    else:
+        currentPlaylist = 'defaultPlaylist.ypl'
+        mpvArg = '--slang=eng,en --fs --fs-screen=2 --sub-font-size=46'
+        f = open('config.ini', 'w', encoding='utf-8')
+        f.writelines([currentPlaylist, '\n', mpvArg])
+        f.close()
+
+    try:
+        if currentPlaylist == '':
+            print('No playlist found in config.ini\nUsing defaultPlaylist.ypl')
+            currentPlaylist = 'defaultPlaylist.ypl'
+    except FileNotFoundError:
+        print('Playlist ' + currentPlaylist + ' not found\nUsing defaultPlaylist.ypl')
+        currentPlaylist = 'defaultPlaylist.ypl'
+
+    try:
+        db = TinyDB(currentPlaylist)
+    except OSError:
+        print('Invalid playlist filename in config.ini\nUsing defaultPlaylist.ypl')
+        currentPlaylist = 'defaultPlaylist.ypl'
+        db = TinyDB(currentPlaylist)
+
+
 sg.theme('Topanga')
 
 menu_def = [['File', ['Open playlist', 'New playlist', 'Exit']],
             ['Settings', ['mpv arguments', 'Shuffle playlist']],
-            ['Help', 'About'], ]
+            ['Help', ['Readme', 'About']], ]
 
 menu_elem = sg.Menu(menu_def)
 
-if path.exists('config.ini'):
-    f = open('config.ini', 'r', encoding='utf-8')
-    currentPlaylist = f.readline().rstrip('\n')
-    mpvArg = f.readline()
-    if mpvArg == '':
-        mpvArg = '--slang=eng,en --fs --fs-screen=2 --sub-font-size=46'
-    f.close()
-else:
-    currentPlaylist = 'defaultPlaylist.ypl'
-    mpvArg = '--slang=eng,en --fs --fs-screen=2 --sub-font-size=46'
-    f = open('config.ini', 'w', encoding='utf-8')
-    f.writelines([currentPlaylist, '\n', mpvArg])
-    f.close()
-
-db = TinyDB(currentPlaylist)
+openPlaylist()
 Link = Query()
 windowSize = (1280, 810)
 
@@ -420,7 +444,8 @@ while True:
 
                 for i in values['videos']:
 
-                    # Reorder videos, not the most efficient way to do this
+                    # Reorder videos
+                    # Not the most efficient way to do this, but it works
                     videoOrder = db.get(Link.videoId == i[0:i.find(' ')])
                     videoOrder = int(videoOrder['order'])
                     for x in range(len(db) - videoOrder - 1):
@@ -457,26 +482,8 @@ while True:
         else:
             pyperclip.copy(' '.join(urls))
 
-
-    if event == 'copy random':
-        """
-        urls = []
-
-        for i in filtering():
-            urls.append('https://www.youtube.com/watch?v=' + i[0:11])
-            print('https://www.youtube.com/watch?v=' + i[0:11])
-
-        seed = random.randrange(sys.maxsize)
-        random.seed(seed)
-        random.shuffle(urls)
-
-        pyperclip.copy('\n'.join(urls))
-        print(str(len(urls)) + ' videos copied to clipboard (randomized)')
-        print('Seed')
-        print(seed)
-        """
-
-    # Very limited, not used atm
+    # Create playlist for Youtube
+    # Very limited, not used atm (max 50 videos per playlist, playlist cannot be saved)
     if event == 'create playlist':
         urls = []
 
@@ -611,8 +618,12 @@ while True:
         window['videos'].update(filtering())
         shufflePlaylist = False
 
-    if event == 'About':
+    if event == 'Readme':
         webbrowser.open('https://github.com/CuriousCod/YoutubePlaylistTool/tree/master')
+
+    if event == 'About':
+        sg.popup('Youtube Playlist Tool v1.4\n\nhttps://github.com/CuriousCod/YoutubePlaylistTool\n',
+                 title='About', icon='logo.ico')
 
     if windowSize != window.size:
         print(window.size)
