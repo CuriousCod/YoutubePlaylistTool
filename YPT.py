@@ -14,13 +14,15 @@ import pyperclip
 # DONE Add confirmation to video delete
 # TODO Add recent playlists feature
 # DONE youtu.be links
-# TODO Tagging
+# DONE Tagging -> Added filter for uploaders, tagging is probably not necessary
 # DONE Reorder playlist
 # DONE Fix reordering bugs: Behavior during filtering
 # TODO Remove copy order commands and switch it to displaying the list in random or default order
 # DONE What to do with deleted video order numbers -> Reorder
 # DONE Source file grabbing with Chrome, makes last line garbage -> Culture
-# TODO More dynamic playlist filepath
+# TODO More dynamic playlist filepath -> partially done, creating new playlist doesn't allow different directory
+# TODO Sort by name
+# TODO Source extraction, again
 
 
 def filtering():
@@ -30,7 +32,8 @@ def filtering():
 
     videos = db.search((Link.videoId.search(values['videoFilter'], flags=re.IGNORECASE)) |
                        (Link.videoId.search(values['videoFilter'][-11:], flags=re.IGNORECASE)) |  # For youtube URL
-                       (Link.title.search(values['videoFilter'], flags=re.IGNORECASE)))
+                       (Link.title.search(values['videoFilter'], flags=re.IGNORECASE)) |
+                       (Link.uploader.search(values['videoFilter'], flags=re.IGNORECASE)))
 
     videoData = [i['videoId'] + ' - ' + i['duration'] + ' - ' + i['title'] for i in videos]
 
@@ -206,6 +209,124 @@ def openPlaylist():
         db = TinyDB(currentPlaylist)
 
 
+# Add youtube links from the input window
+def addLinks():
+    event, values = window2.read(timeout=0)
+    links = values['input'].split('\n')
+    print(links)
+
+    for i in links:
+
+        if i.find('https://www.youtube.com/watch?v=') != -1:
+            videoId = i.find('watch?') + 8
+            videoId = i[videoId:videoId + 11]
+
+            if videoId.find(' ') == -1 and len(videoId) == 11:
+
+                if (db.contains(Link.videoId == videoId)) is False:
+                    db.insert({'videoId': videoId
+                                  , 'title': '', 'thumbnail': '', 'duration': '', 'uploader': '',
+                               'order': str(len(db) + 1)})
+
+        if i.find('https://youtu.be/') != -1:
+            videoId = i.find('be/') + 3
+            videoId = i[videoId:videoId + 11]
+
+            if videoId.find(' ') == -1 and len(videoId) == 11:
+
+                if (db.contains(Link.videoId == videoId)) is False:
+                    db.insert({'videoId': videoId
+                                  , 'title': '', 'thumbnail': '', 'duration': '', 'uploader': '',
+                               'order': str(len(db) + 1)})
+
+    vpos = window['videos'].Widget.yview()
+
+    window2['input'].update('')
+    window['videos'].update(viewData())
+    window['videos'].set_vscroll_position(vpos[0])
+    window.refresh()
+    window2.close()
+
+
+# Reset listbox view
+def clear():
+    event, values = window.read(timeout=0)
+    vpos = window['videos'].Widget.yview()
+    selection = values['videos']
+
+    window['videos'].update(viewData())
+    window['videos'].set_vscroll_position(vpos[0])
+    window['up'].update(disabled=False)
+    window['down'].update(disabled=False)
+    window['videos'].SetValue(selection)
+
+
+# Update videos that have missing data
+def update():
+    ids = [i['videoId'] for i in db]
+    missingData = []
+    for i in ids:
+        title = db.get(Link.videoId == i)
+        title = title.get('title')
+        if title == "":
+            missingData.append(i)
+
+    print(str(len(missingData)) + ' videos missing video information')
+    if len(missingData) > 0:
+        print('Downloading video information...')
+
+    for count, i in enumerate(missingData):
+        try:
+            ydl = youtube_dl.YoutubeDL({'outtmpl': '%(id)s.%(ext)s', 'cookiefile': 'cookies.txt'})
+            info = ydl.extract_info(i, download=False)
+            print(info['title'])
+            print(info['thumbnail'])
+            print(info['duration'])
+            print(info['uploader'])
+            print('Completed ' + str(count + 1) + ' / ' + str(len(missingData)) + ' videos')
+
+            video_duration = str(int(info['duration'] / 60))
+            video_duration = video_duration + ':' + str(info['duration'] % 60).zfill(2)
+
+            db.update(Set('title', info['title']), Link.videoId == i)
+            db.update(Set('thumbnail', info['thumbnail']), Link.videoId == i)
+            db.update(Set('duration', video_duration), Link.videoId == i)
+            db.update(Set('uploader', info['uploader']), Link.videoId == i)
+            time.sleep(3)
+        except youtube_dl.utils.DownloadError:
+            print('Unable to download video information!')
+
+    vpos = window['videos'].Widget.yview()
+
+    window['videos'].update(viewData())
+    window['videos'].set_vscroll_position(vpos[0])
+
+
+# Delete selected videos
+def deleteVideos():
+    event, values = window.read(timeout=0)
+
+    if values['videos']:
+        popupInput = sg.popup_yes_no('Delete selected videos?')
+        if popupInput == 'Yes':
+
+            for i in values['videos']:
+
+                # Reorder videos when one is deleted
+                # Not the most efficient way to do this, but it works
+                videoOrder = db.get(Link.videoId == i[0:i.find(' ')])
+                videoOrder = int(videoOrder['order'])
+                for x in range(len(db) - videoOrder - 1):
+                    db.update(Set('order', str(videoOrder + x)), Link.order == str(videoOrder + x + 1))
+
+                db.remove(Link.videoId == i[0:i.find(' ')])
+
+            vpos = window['videos'].Widget.yview()
+
+            window['videos'].update(filtering())
+            window['videos'].set_vscroll_position(vpos[0])
+
+
 sg.theme('Topanga')
 
 menu_def = [['File', ['Open playlist', 'New playlist', 'Exit']],
@@ -216,7 +337,7 @@ menu_elem = sg.Menu(menu_def)
 
 openPlaylist()
 Link = Query()
-windowSize = (1280, 810)
+windowSize = (1280, 810)  # Default window size
 
 global shufflePlaylist
 shufflePlaylist = False
@@ -247,7 +368,7 @@ layout = [
 ]
 
 global window
-window = sg.Window('Youtube Playlist Tool - ' + currentPlaylist[0:-1-3], layout, font='Courier 12', size=(windowSize),
+window = sg.Window('Youtube Playlist Tool - ' + currentPlaylist[currentPlaylist.find('/') + 1:-1-3], layout, font='Courier 12', size=(windowSize),
                    resizable=True, icon='logo.ico').finalize()
 
 while True:
@@ -282,44 +403,11 @@ while True:
                     window2['input'].update('\n'.join(extractVideos()))
 
             if event == 'add links':
-                links = values['input'].split('\n')
-                print(links)
-
-                for i in links:
-
-                    if i.find('https://www.youtube.com/watch?v=') != -1:
-                        videoId = i.find('watch?') + 8
-                        videoId = i[videoId:videoId + 11]
-
-                        if videoId.find(' ') == -1 and len(videoId) == 11:
-
-                            if (db.contains(Link.videoId == videoId)) is False:
-                                db.insert({'videoId': videoId
-                                           , 'title': '', 'thumbnail': '', 'duration': '', 'uploader': '',
-                                           'order': str(len(db) + 1)})
-
-                    if i.find('https://youtu.be/') != -1:
-                        videoId = i.find('be/') + 3
-                        videoId = i[videoId:videoId + 11]
-
-                        if videoId.find(' ') == -1 and len(videoId) == 11:
-
-                            if (db.contains(Link.videoId == videoId)) is False:
-                                db.insert({'videoId': videoId
-                                           , 'title': '', 'thumbnail': '', 'duration': '', 'uploader': '',
-                                           'order': str(len(db) + 1)})
-
-                vpos = window['videos'].Widget.yview()
-
-                window2['input'].update('')
-                window['videos'].update(viewData())
-                window['videos'].set_vscroll_position(vpos[0])
-                window.refresh()
-                window2.close()
+                addLinks()
                 break
 
+    # When listbox is clicked
     if event == 'videos':
-
         try:
             if values['videos'][0] != '':
 
@@ -370,43 +458,7 @@ while True:
             print('List is empty!')
 
     if event == 'Update':
-        ids = [i['videoId'] for i in db]
-        missingData = []
-        for i in ids:
-            title = db.get(Link.videoId == i)
-            title = title.get('title')
-            if title == "":
-                missingData.append(i)
-
-        print(str(len(missingData)) + ' videos missing video information')
-        if len(missingData) > 0:
-            print('Downloading video information...')
-
-        for count, i in enumerate(missingData):
-            try:
-                ydl = youtube_dl.YoutubeDL({'outtmpl': '%(id)s.%(ext)s', 'cookiefile': 'cookies.txt'})
-                info = ydl.extract_info(i, download=False)
-                print(info['title'])
-                print(info['thumbnail'])
-                print(info['duration'])
-                print(info['uploader'])
-                print('Completed ' + str(count + 1) + ' / ' + str(len(missingData)) + ' videos')
-
-                video_duration = str(int(info['duration'] / 60))
-                video_duration = video_duration + ':' + str(info['duration'] % 60).zfill(2)
-
-                db.update(Set('title', info['title']), Link.videoId == i)
-                db.update(Set('thumbnail', info['thumbnail']), Link.videoId == i)
-                db.update(Set('duration', video_duration), Link.videoId == i)
-                db.update(Set('uploader', info['uploader']), Link.videoId == i)
-                time.sleep(3)
-            except youtube_dl.utils.DownloadError:
-                print('Unable to download video information!')
-
-        vpos = window['videos'].Widget.yview()
-
-        window['videos'].update(viewData())
-        window['videos'].set_vscroll_position(vpos[0])
+        update()
 
     if event == 'Copy URL':
 
@@ -436,27 +488,7 @@ while True:
         subprocess.Popen('mpv ' + mpvArg + ' ' + urls, shell=True)
 
     if event == 'Delete video(s)':
-
-        if values['videos']:
-            popupInput = sg.popup_yes_no('Delete selected videos?')
-            if popupInput == 'Yes':
-                urls = []
-
-                for i in values['videos']:
-
-                    # Reorder videos
-                    # Not the most efficient way to do this, but it works
-                    videoOrder = db.get(Link.videoId == i[0:i.find(' ')])
-                    videoOrder = int(videoOrder['order'])
-                    for x in range(len(db) - videoOrder - 1):
-                        db.update(Set('order', str(videoOrder + x)), Link.order == str(videoOrder + x + 1))
-
-                    db.remove(Link.videoId == i[0:i.find(' ')])
-
-                vpos = window['videos'].Widget.yview()
-
-                window['videos'].update(filtering())
-                window['videos'].set_vscroll_position(vpos[0])
+        deleteVideos()
 
     if event == 'Copy':
 
@@ -498,13 +530,8 @@ while True:
         runScript(2)
 
     if event == 'clear':
-        vpos = window['videos'].Widget.yview()
-
         window['videoFilter'].update('')
-        window['videos'].update(viewData())
-        window['videos'].set_vscroll_position(vpos[0])
-        window['up'].update(disabled=False)
-        window['down'].update(disabled=False)
+        clear()
 
     if event == 'up':
 
@@ -575,9 +602,7 @@ while True:
         if len(values['videoFilter']) > 2:
             window['videos'].update(filtering())
         else:
-            window['videos'].update(viewData())
-            window['up'].update(disabled=False)
-            window['down'].update(disabled=False)
+            clear()
 
     if event == 'Open playlist':
         currentPlaylist = sg.popup_get_file('', title='Select Playlist',
@@ -586,11 +611,12 @@ while True:
             print('No file selected!')
         else:
             db = TinyDB(currentPlaylist)
+            window['videoFilter'].update('')
             window['videos'].update(viewData())
             window.TKroot.title('Youtube Playlist Tool - ' + currentPlaylist[currentPlaylist.rfind('/') + 1:-1-3])
 
             with open('config.ini', 'w', encoding='utf-8') as f:
-                f.writelines([currentPlaylist[currentPlaylist.rfind('/') + 1:], '\n', mpvArg])
+                f.writelines([currentPlaylist, '\n', mpvArg])
 
     if event == 'New playlist':
         currentPlaylist = sg.popup_get_text('Input playlist name')
@@ -598,6 +624,7 @@ while True:
         if currentPlaylist is not None:
 
             db = TinyDB(currentPlaylist + '.ypl')
+            window['videoFilter'].update('')
             window['videos'].update(viewData())
             window.TKroot.title('Youtube Playlist Tool - ' + currentPlaylist)
 
@@ -625,6 +652,7 @@ while True:
         sg.popup('Youtube Playlist Tool v1.4\n\nhttps://github.com/CuriousCod/YoutubePlaylistTool\n',
                  title='About', icon='logo.ico')
 
+    # Works perfectly when maximizing window, otherwise only updates when any action is taken in the window
     if windowSize != window.size:
         print(window.size)
         CurrentWindowSize = window.size
