@@ -22,7 +22,6 @@ import pyperclip
 # DONE Source file grabbing with Chrome, makes last line garbage -> Culture
 # TODO More dynamic playlist filepath -> partially done, creating new playlist doesn't allow different directory
 # TODO Sort by name
-# TODO Source extraction, again
 
 
 def filtering():
@@ -128,7 +127,11 @@ def extractVideos():
     print(text.find('\"playlist\":'))
     print(text.rfind('\"playlistEditEndpoint\"'))
 
-    text = text[text.find('\"playlist\":'):text.rfind('\"toggledAccessibilityData\"')]
+    if text.rfind('\"toggledAccessibilityData\"') == -1:
+        text = text[text.find('\"playlist\":'):text.rfind('\"setVideoId\"')]
+    else:
+        text = text[text.find('\"playlist\":'):text.rfind('\"toggledAccessibilityData\"')]
+
     links = []
 
     # Grab all unique matches with the key VideoId and add them to the list
