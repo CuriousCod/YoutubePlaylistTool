@@ -23,3 +23,5 @@ Create, manage and play Youtube playlists using URLs. Optimized to playback vide
   -  To play, press mouse right click on a video
 - You can add cookies.txt to the application folder to avoid youtube-dl's 429 error when downloading video information
 - Releases are compiled as .exe with auto-py-to-exe, this can cause false positives with anti-virus programs
+
+![Preview image](https://www.dropbox.com/s/wkq9e4pebvgi50a/screenshot%202020-10-10%2014.06.39.png?raw=1)
