@@ -168,6 +168,7 @@ def CreateWindowLayout(createWindow):
              sg.Text(size=(16, 1)), sg.Button('Cancel', key='cancel', size=(7, 2)), sg.Button('OK', key='add links', size=(4, 2))]
         ]
         windowTitle = 'Youtube Playlist Tool - Add Videos'
+        return sg.Window(windowTitle, layout, font='Courier 12', modal=True, icon='logo.ico')
 
     # Playlist selection window
     if createWindow == 2:
