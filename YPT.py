@@ -2,9 +2,11 @@ import PySimpleGUI as sg
 from tinydb import TinyDB, Query
 import youtube_dl
 from tinydb.operations import set as Set
-import re, time, random, os, sys, webbrowser, subprocess
+import re, time, random, os, sys, webbrowser, subprocess, textwrap, datetime
 from os import path
 import pyperclip
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 
 # DONE Add total video count -> Printed when pressing copy
 # DONE Support for multiple db
@@ -22,7 +24,9 @@ import pyperclip
 # DONE Source file grabbing with Chrome, makes last line garbage -> Culture
 # TODO More dynamic playlist filepath -> partially done, creating new playlist doesn't allow different directory
 # TODO Sort by name
-
+# TODO Workaround for the command line is too long error
+# TODO See if audio levels can be normalized -> No easy way to do this
+# DONE db in google sheets
 
 def filtering():
 
@@ -40,6 +44,7 @@ def filtering():
     # This is actually faster than searching through the database for the video order
     order = [int(i['order']) for i in videos]
 
+    # Quick Shuffle
     if shufflePlaylist is True:
         random.shuffle(order)
 
@@ -91,6 +96,7 @@ def viewData():
     try:
         order = [int(i['order']) for i in db]
 
+        # Quick Shuffle
         if shufflePlaylist is True:
             random.shuffle(order)
 
@@ -127,6 +133,7 @@ def extractVideos():
     print(text.find('\"playlist\":'))
     print(text.rfind('\"playlistEditEndpoint\"'))
 
+    # Find start and end of playlist videos from the source code
     if text.rfind('\"toggledAccessibilityData\"') == -1:
         text = text[text.find('\"playlist\":'):text.rfind('\"setVideoId\"')]
     else:
@@ -153,6 +160,7 @@ def extractVideos():
 
 def CreateWindowLayout(createWindow):
 
+    # Link extraction window
     if createWindow == 1:
         layout = [
             [sg.Multiline('', key='input', size=(48, 28), enable_events=True, focus=True, right_click_menu=['&Right', ['Paste']])],
@@ -161,7 +169,15 @@ def CreateWindowLayout(createWindow):
         ]
         windowTitle = 'Youtube Playlist Tool - Add Videos'
 
+    # Playlist selection window
+    if createWindow == 2:
+        layout = [
+            [sg.Listbox('', key='playlistInput', size=(48, 28), enable_events=True)],
+            [sg.Text(size=(16, 1)), sg.Button('Cancel', key='cancelPlaylistInput', size=(7, 2)), sg.Button('OK', key='okPlaylistInput', size=(4, 2))]
+        ]
+        windowTitle = 'Youtube Playlist Tool - Choose playlist to download'
         return sg.Window(windowTitle, layout, font='Courier 12', modal=True, icon='logo.ico')
+
 
 # For running db scripts
 def runScript(script):
@@ -174,6 +190,26 @@ def runScript(script):
         if script == 2:
             db.update(Set('order', str(x)), Link.videoId == i)
             x += 1
+
+
+# Create new playlist db
+def NewPlaylist(db, mpvArg):
+    newPlaylist = sg.popup_get_text('Input playlist name')
+
+    if newPlaylist is not None and newPlaylist != '':
+        if not os.path.isfile(newPlaylist + '.ypl'):
+            db = TinyDB(newPlaylist + '.ypl')
+            window['videoFilter'].update('')
+            window['videos'].update(viewData())
+            window.TKroot.title('Youtube Playlist Tool - ' + newPlaylist)
+
+            with open('config.ini', 'w', encoding='utf-8') as f:
+                f.writelines([newPlaylist + '.ypl', '\n', mpvArg])
+        else:
+            newPlaylist = None
+            print('Playlist already exists.')
+
+    return db, newPlaylist
 
 
 # Open playlist db
@@ -304,6 +340,162 @@ def update():
     window['videos'].update(viewData())
     window['videos'].set_vscroll_position(vpos[0])
 
+def accessGSheets():
+    # define the scope
+    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+    # add credentials to the account
+    try:
+        creds = ServiceAccountCredentials.from_json_keyfile_name('client_secret.json', scope)
+    except FileNotFoundError:
+        print('client_secret.json not found!')
+        print('Do you have rights to access the database?')
+        return None
+
+    # authorize the clientsheet
+    client = gspread.authorize(creds)
+
+    # Find a workbook by name
+    table = client.open("YTPDB")
+
+    return table
+
+def manageGSheets(action, db, currentPlaylist):
+    table = accessGSheets()
+
+    if table is None:
+        print('Couldn\'t access database, canceling...')
+        return
+
+    # Upload playlist
+    if action == 0:
+        # List all the worksheets
+        worksheet_list = table.worksheets()
+
+        dateAndTime = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        sheets = []
+
+        # Add all sheet titles to a list
+        for i in worksheet_list:
+            sheets.append(i.title)
+
+        playlistName = currentPlaylist[currentPlaylist.rfind('/') + 1:-4]
+
+        # Check if there is a sheet for the playlist
+        try:
+            sheetIndex = sheets.index(playlistName)
+            sheet = table.worksheet(sheets[sheetIndex])
+            newSheet = False
+        except ValueError:
+            sheet = table.add_worksheet(title=playlistName, rows=10, cols=10)
+            sheet.insert_row(['DateTime', 'PartCount', 'Data'])
+            newSheet = True
+
+        # Read the playlist into a string
+        with open(currentPlaylist, 'r', encoding='utf-8') as f:
+            line = f.readline()
+            print(len(line))
+
+            # Split text between 50000 characters to workaround cell character limit
+            lines = textwrap.wrap(line, 50000)
+            len(lines)
+
+            # Grab latest entry from server
+            previousLines = []
+            if not newSheet:
+                partCount = int(sheet.cell(2, 2).value)
+                for i in range(partCount):
+                    previousLines.append(sheet.cell(2, i + 3, ).value)
+
+            # Upload new backup, if different from previous one
+            if previousLines != lines:
+
+                # cell = sheet.find(currentPlaylist[currentPlaylist.rfind('/') + 1:-4], in_column=1)
+                sheet.insert_row([dateAndTime, len(lines)], index=2)
+
+                for count, i in enumerate(lines):
+                    sheet.update_cell(2, count + 3, i)
+
+                print('Playlist uploaded successfully!')
+                return
+
+            else:
+                print('Previous backup is identical to current one.')
+                print('Playlist not uploaded.')
+                return
+
+    # Download playlist
+    if action == 1:
+        # List all the worksheets
+        worksheet_list = table.worksheets()
+
+        # Add all sheet titles to a list
+        playlists = []
+        for i in worksheet_list:
+            playlists.append(i.title)
+
+        chosenPlaylist = ''
+
+        window3 = CreateWindowLayout(2)
+        window3.finalize()
+
+        window3['playlistInput'].update(playlists)
+        selectPlaylistVersion = False
+        chosenPlaylistRow = None
+
+        while True:
+            event, values = window3.read()
+
+            if event == sg.WIN_CLOSED or event == 'Exit':
+                window3.close()
+                break
+
+            if event == 'cancelPlaylistInput':
+                window3.close()
+                break
+
+            # TODO check if nothing selected in listbox
+            if event == 'okPlaylistInput':
+                if selectPlaylistVersion:
+                    chosenPlaylistRow = values['playlistInput'][0].split(' ')[0]
+                    chosenPlaylistRow = int(chosenPlaylistRow) + 1
+                    print(chosenPlaylistRow)
+                    window3.close()
+                    break
+                else:
+                    chosenPlaylist = values['playlistInput'][0]
+                    print(chosenPlaylist)
+                    sheet = table.worksheet(chosenPlaylist)
+
+                    playlistDates = sheet.col_values(1)
+                    playlistVersions = [str(i) + ' ' + str(x) for i, x in enumerate(playlistDates)]
+
+                    window3['playlistInput'].update(playlistVersions[1:])
+                    selectPlaylistVersion = True
+
+        if chosenPlaylistRow is not None:
+            partCount = int(sheet.cell(chosenPlaylistRow, 2, ).value)
+            print(partCount)
+
+            lines = []
+
+            for i in range(partCount):
+                lines.append(sheet.cell(chosenPlaylistRow, i + 3).value)
+            print(lines)
+
+            db, newPlaylist = NewPlaylist(db, mpvArg)
+
+            if newPlaylist is not None:
+                currentPlaylist = newPlaylist
+                with open(currentPlaylist + '.ypl', 'w', encoding='utf-8') as f:
+                    f.writelines(lines)
+
+                window['videoFilter'].update('')
+                window['videos'].update(viewData())
+
+                print('Playlist downloaded successfully!')
+                return
+
 
 # Delete selected videos
 def deleteVideos():
@@ -334,6 +526,7 @@ sg.theme('Topanga')
 
 menu_def = [['File', ['Open playlist', 'New playlist', 'Exit']],
             ['Settings', ['mpv arguments', 'Shuffle playlist']],
+            ['Sync', ['Upload playlist', 'Download playlist']],
             ['Help', ['Readme', 'About']], ]
 
 menu_elem = sg.Menu(menu_def)
@@ -353,7 +546,8 @@ col1 = [
     [sg.Button('Add'),
     sg.Button('Update'),
     #sg.Button('Create Playlist', key='create playlist'),
-    sg.Button('Copy'), sg.Text('', size=(26, 1), pad=(8, 1)), sg.Radio('List  ', group_id='type', default=True, key='copy type'), sg.Radio('mpv list', group_id='type')],
+    sg.Button('Copy'),
+    sg.Text('', size=(26, 1), pad=(8, 1)), sg.Radio('List  ', group_id='type', default=True, key='copy type'), sg.Radio('mpv list', group_id='type')],
     #[sg.Button('Script')]  # For running quick db scripts
 ]
 
@@ -371,7 +565,7 @@ layout = [
 ]
 
 global window
-window = sg.Window('Youtube Playlist Tool - ' + currentPlaylist[currentPlaylist.find('/') + 1:-1-3], layout, font='Courier 12', size=(windowSize),
+window = sg.Window('Youtube Playlist Tool - ' + currentPlaylist[currentPlaylist.rfind('/') + 1:-1-3], layout, font='Courier 12', size=(windowSize),
                    resizable=True, icon='logo.ico').finalize()
 
 while True:
@@ -464,7 +658,6 @@ while True:
         update()
 
     if event == 'Copy URL':
-
         urls = []
 
         for i in values['videos']:
@@ -484,7 +677,7 @@ while True:
         urls = []
 
         for i in values['videos']:
-            urls.append('https://www.youtube.com/watch?v=' + i[0:11])
+            urls.append('https://youtu.be/' + i[0:11])
 
         urls = ' '.join(urls)
 
@@ -525,8 +718,16 @@ while True:
         for i in filtering():
             urls.append(i[0:11])
 
-        playlistUrl = 'http://www.youtube.com/watch_videos?video_ids=' + ','.join(urls)
-        print(playlistUrl)
+        random.shuffle(urls)
+
+        playlistUrl = 'http://www.youtube.com/watch_videos?video_ids=' + ','.join(urls[0:50])
+        print(playlistUrl + '\n')
+        playlistUrl = 'http://www.youtube.com/watch_videos?video_ids=' + ','.join(urls[50:100])
+        print(playlistUrl + '\n')
+        playlistUrl = 'http://www.youtube.com/watch_videos?video_ids=' + ','.join(urls[100:150])
+        print(playlistUrl + '\n')
+        playlistUrl = 'http://www.youtube.com/watch_videos?video_ids=' + ','.join(urls[150:-1])
+        print(playlistUrl + '\n')
 
     # For running db scripts
     if event == 'Script':
@@ -622,37 +823,34 @@ while True:
                 f.writelines([currentPlaylist, '\n', mpvArg])
 
     if event == 'New playlist':
-        currentPlaylist = sg.popup_get_text('Input playlist name')
-
-        if currentPlaylist is not None:
-
-            db = TinyDB(currentPlaylist + '.ypl')
-            window['videoFilter'].update('')
-            window['videos'].update(viewData())
-            window.TKroot.title('Youtube Playlist Tool - ' + currentPlaylist)
-
-            with open('config.ini', 'w', encoding='utf-8') as f:
-                f.writelines([currentPlaylist + '.ypl', '\n', mpvArg])
+        db, currentPlaylist = NewPlaylist(db, mpvArg)
 
     if event == 'mpv arguments':
-        mpvArg = sg.popup_get_text('Input mpv launch arguments', default_text=mpvArg)
+        arguments = sg.popup_get_text('Input mpv launch arguments', default_text=mpvArg)
 
-        if mpvArg is not None:
+        if arguments is not None:
+            mpvArg = arguments
             with open('config.ini', 'w', encoding='utf-8') as f:
                 f.writelines([currentPlaylist, '\n', mpvArg])
-        else:
-            mpvArg = ''
 
     if event == 'Shuffle playlist':
         shufflePlaylist = True
         window['videos'].update(filtering())
         shufflePlaylist = False
 
+    # Download a playlist from Google Sheets
+    if event == 'Download playlist':
+        manageGSheets(1, db, currentPlaylist)
+
+    # Upload a playlist into Google Sheets
+    if event == 'Upload playlist':
+        manageGSheets(0, db, currentPlaylist)
+
     if event == 'Readme':
         webbrowser.open('https://github.com/CuriousCod/YoutubePlaylistTool/tree/master')
 
     if event == 'About':
-        sg.popup('Youtube Playlist Tool v1.4\n\nhttps://github.com/CuriousCod/YoutubePlaylistTool\n',
+        sg.popup('Youtube Playlist Tool v1.4.1\n\nhttps://github.com/CuriousCod/YoutubePlaylistTool\n',
                  title='About', icon='logo.ico')
 
     # Works perfectly when maximizing window, otherwise only updates when any action is taken in the window
