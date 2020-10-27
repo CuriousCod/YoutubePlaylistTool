@@ -489,6 +489,7 @@ def downloadGSheets(db, currentPlaylist):
                     print(chosenPlaylist)
                     sheet = table.worksheet(chosenPlaylist)
 
+                    # TODO Add more info about the playlist versions
                     playlistDates = sheet.col_values(1)
                     playlistVersions = [str(i) + ' ' + str(x) for i, x in enumerate(playlistDates)]
 
@@ -515,6 +516,9 @@ def downloadGSheets(db, currentPlaylist):
                 f.writelines(lines)
 
             print('Playlist downloaded successfully!')
+
+    window['videoFilter'].update('')
+    window['videos'].update(viewData())
 
     return db, currentPlaylist
 
@@ -695,7 +699,6 @@ while True:
             webbrowser.open(url)
 
     if event == 'Play with mpv':
-
         urls = []
 
         for i in values['videos']:
@@ -742,14 +745,10 @@ while True:
 
         random.shuffle(urls)
 
-        playlistUrl = 'http://www.youtube.com/watch_videos?video_ids=' + ','.join(urls[0:50])
-        print(playlistUrl + '\n')
-        playlistUrl = 'http://www.youtube.com/watch_videos?video_ids=' + ','.join(urls[50:100])
-        print(playlistUrl + '\n')
-        playlistUrl = 'http://www.youtube.com/watch_videos?video_ids=' + ','.join(urls[100:150])
-        print(playlistUrl + '\n')
-        playlistUrl = 'http://www.youtube.com/watch_videos?video_ids=' + ','.join(urls[150:-1])
-        print(playlistUrl + '\n')
+        for i in range(0, len(urls), 50):
+            playlistUrl = 'http://www.youtube.com/watch_videos?video_ids=' + ','.join(urls[i:i + 50])
+            print(playlistUrl + '\n')
+
 
     # For running db scripts
     if event == 'Script':
@@ -863,6 +862,7 @@ while True:
     # Download a playlist from Google Sheets
     if event == 'Download playlist':
         db, currentPlaylist = downloadGSheets(db, currentPlaylist)
+
         window['videoFilter'].update('')
         window['videos'].update(viewData())
 
@@ -881,7 +881,7 @@ while True:
     if windowSize != window.size:
         print(window.size)
         CurrentWindowSize = window.size
-        VideosElementSize = (int(CurrentWindowSize[0] * 0.1), int(CurrentWindowSize[1] * 0.044))
+        VideosElementSize = (int(CurrentWindowSize[0] * 0.1), int(CurrentWindowSize[1] * 0.045))
         print(VideosElementSize)
         window['videos'].set_size(VideosElementSize)
         windowSize = window.size
