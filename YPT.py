@@ -170,7 +170,7 @@ def CreateWindowLayout(createWindow):
         windowTitle = 'Youtube Playlist Tool - Add Videos'
         return sg.Window(windowTitle, layout, font='Courier 12', modal=True, icon='logo.ico')
 
-    # Playlist selection window
+    # Playlist selection window during download
     if createWindow == 2:
         layout = [
             [sg.Listbox('', key='playlistInput', size=(48, 28), enable_events=True)],
@@ -207,16 +207,23 @@ def NewPlaylist(db, mpvArg):
             with open('config.ini', 'w', encoding='utf-8') as f:
                 f.writelines([newPlaylist + '.ypl', '\n', mpvArg])
         else:
-            newPlaylist = None
-            print('Playlist already exists.')
+            answer = sg.popup_yes_no('Playlist already exists.\nOverwrite?')
+            if answer:
+                db = TinyDB(newPlaylist + '.ypl')
+                window['videoFilter'].update('')
+                window['videos'].update(viewData())
+                window.TKroot.title('Youtube Playlist Tool - ' + newPlaylist)
+
+                with open('config.ini', 'w', encoding='utf-8') as f:
+                    f.writelines([newPlaylist + '.ypl', '\n', mpvArg])
+            else:
+                newPlaylist = None
 
     return db, newPlaylist
 
 
 # Open playlist db
 def openPlaylist():
-
-    global currentPlaylist, mpvArg, db
 
     # Check config.ini for playlist name
     if path.exists('config.ini'):
@@ -247,6 +254,8 @@ def openPlaylist():
         print('Invalid playlist filename in config.ini\nUsing defaultPlaylist.ypl')
         currentPlaylist = 'defaultPlaylist.ypl'
         db = TinyDB(currentPlaylist)
+
+    return currentPlaylist, mpvArg, db
 
 
 # Add youtube links from the input window
@@ -360,109 +369,121 @@ def accessGSheets():
 
     return table
 
-def manageGSheets(action, db, currentPlaylist):
+# Upload playlist
+def uploadGSheets(currentPlaylist):
     table = accessGSheets()
 
     if table is None:
         print('Couldn\'t access database, canceling...')
         return
 
-    # Upload playlist
-    if action == 0:
-        # List all the worksheets
-        worksheet_list = table.worksheets()
+    # List all the worksheets
+    worksheet_list = table.worksheets()
 
-        dateAndTime = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    dateAndTime = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        sheets = []
+    sheets = []
 
-        # Add all sheet titles to a list
-        for i in worksheet_list:
-            sheets.append(i.title)
+    # Add all sheet titles to a list
+    for i in worksheet_list:
+        sheets.append(i.title)
 
-        playlistName = currentPlaylist[currentPlaylist.rfind('/') + 1:-4]
+    playlistName = currentPlaylist[currentPlaylist.rfind('/') + 1:-4]
 
-        # Check if there is a sheet for the playlist
-        try:
-            sheetIndex = sheets.index(playlistName)
-            sheet = table.worksheet(sheets[sheetIndex])
-            newSheet = False
-        except ValueError:
-            sheet = table.add_worksheet(title=playlistName, rows=10, cols=10)
-            sheet.insert_row(['DateTime', 'PartCount', 'Data'])
-            newSheet = True
+    # Check if there is a sheet for the playlist
+    try:
+        sheetIndex = sheets.index(playlistName)
+        sheet = table.worksheet(sheets[sheetIndex])
+        newSheet = False
+    except ValueError:
+        sheet = table.add_worksheet(title=playlistName, rows=10, cols=10)
+        sheet.insert_row(['DateTime', 'PartCount', 'Data'])
+        newSheet = True
 
-        # Read the playlist into a string
-        with open(currentPlaylist, 'r', encoding='utf-8') as f:
-            line = f.readline()
-            print(len(line))
+    # Read the playlist into a string
+    with open(currentPlaylist, 'r', encoding='utf-8') as f:
+        line = f.readline()
+        print(len(line))
 
-            # Split text between 50000 characters to workaround cell character limit
-            lines = textwrap.wrap(line, 50000)
-            len(lines)
+        # Split text between 50000 characters to workaround cell character limit
+        lines = textwrap.wrap(line, 50000)
+        len(lines)
 
-            # Grab latest entry from server
-            previousLines = []
-            if not newSheet:
-                partCount = int(sheet.cell(2, 2).value)
-                for i in range(partCount):
-                    previousLines.append(sheet.cell(2, i + 3, ).value)
+        # Grab latest entry from server
+        previousLines = []
+        if not newSheet:
+            partCount = int(sheet.cell(2, 2).value)
+            for i in range(partCount):
+                previousLines.append(sheet.cell(2, i + 3, ).value)
 
-            # Upload new backup, if different from previous one
-            if previousLines != lines:
+        # Upload new backup, if different from previous one
+        if previousLines != lines:
 
-                # cell = sheet.find(currentPlaylist[currentPlaylist.rfind('/') + 1:-4], in_column=1)
-                sheet.insert_row([dateAndTime, len(lines)], index=2)
+            # cell = sheet.find(currentPlaylist[currentPlaylist.rfind('/') + 1:-4], in_column=1)
+            sheet.insert_row([dateAndTime, len(lines)], index=2)
 
-                for count, i in enumerate(lines):
-                    sheet.update_cell(2, count + 3, i)
+            for count, i in enumerate(lines):
+                sheet.update_cell(2, count + 3, i)
 
-                print('Playlist uploaded successfully!')
-                return
+            print('Playlist uploaded successfully!')
+            return
 
-            else:
-                print('Previous backup is identical to current one.')
-                print('Playlist not uploaded.')
-                return
+        else:
+            print('Previous backup is identical to current one.')
+            print('Playlist not uploaded.')
+            return
 
-    # Download playlist
-    if action == 1:
-        # List all the worksheets
-        worksheet_list = table.worksheets()
 
-        # Add all sheet titles to a list
-        playlists = []
-        for i in worksheet_list:
-            playlists.append(i.title)
+# Download playlist
+def downloadGSheets(db, currentPlaylist):
+    table = accessGSheets()
 
-        chosenPlaylist = ''
+    if table is None:
+        print('Couldn\'t access database, canceling...')
+        return db, currentPlaylist
 
-        window3 = CreateWindowLayout(2)
-        window3.finalize()
+    # List all the worksheets
+    worksheet_list = table.worksheets()
 
-        window3['playlistInput'].update(playlists)
-        selectPlaylistVersion = False
-        chosenPlaylistRow = None
+    # Add all sheet titles to a list
+    playlists = []
+    for i in worksheet_list:
+        playlists.append(i.title)
 
-        while True:
-            event, values = window3.read()
+    if playlists is None:
+        print('No playlists found in database.')
+        return db, currentPlaylist
 
-            if event == sg.WIN_CLOSED or event == 'Exit':
-                window3.close()
-                break
+    # Create window to display uploaded playlists
+    window3 = CreateWindowLayout(2)
+    window3.finalize()
 
-            if event == 'cancelPlaylistInput':
-                window3.close()
-                break
+    window3['playlistInput'].update(playlists)
 
-            # TODO check if nothing selected in listbox
-            if event == 'okPlaylistInput':
+    selectPlaylistVersion = False
+    chosenPlaylistRow = None
+
+    while True:
+        event, values = window3.read()
+
+        if event == sg.WIN_CLOSED or event == 'Exit':
+            window3.close()
+            break
+
+        if event == 'cancelPlaylistInput':
+            window3.close()
+            break
+
+        if event == 'okPlaylistInput':
+            if len(values['playlistInput']) > 0:
+                # Display different versions of chosen playlist
                 if selectPlaylistVersion:
                     chosenPlaylistRow = values['playlistInput'][0].split(' ')[0]
                     chosenPlaylistRow = int(chosenPlaylistRow) + 1
                     print(chosenPlaylistRow)
                     window3.close()
                     break
+                # Display all available playlists, this runs first
                 else:
                     chosenPlaylist = values['playlistInput'][0]
                     print(chosenPlaylist)
@@ -472,30 +493,30 @@ def manageGSheets(action, db, currentPlaylist):
                     playlistVersions = [str(i) + ' ' + str(x) for i, x in enumerate(playlistDates)]
 
                     window3['playlistInput'].update(playlistVersions[1:])
+
+                    # Loop to playlist version selection
                     selectPlaylistVersion = True
 
-        if chosenPlaylistRow is not None:
-            partCount = int(sheet.cell(chosenPlaylistRow, 2, ).value)
-            print(partCount)
+    if chosenPlaylistRow is not None:
+        partCount = int(sheet.cell(chosenPlaylistRow, 2, ).value)
+        print(partCount)
 
-            lines = []
+        lines = []
 
-            for i in range(partCount):
-                lines.append(sheet.cell(chosenPlaylistRow, i + 3).value)
-            print(lines)
+        for i in range(partCount):
+            lines.append(sheet.cell(chosenPlaylistRow, i + 3).value)
+        print(lines)
 
-            db, newPlaylist = NewPlaylist(db, mpvArg)
+        db, newPlaylist = NewPlaylist(db, mpvArg)
 
-            if newPlaylist is not None:
-                currentPlaylist = newPlaylist
-                with open(currentPlaylist + '.ypl', 'w', encoding='utf-8') as f:
-                    f.writelines(lines)
+        if newPlaylist is not None:
+            currentPlaylist = newPlaylist
+            with open(currentPlaylist + '.ypl', 'w', encoding='utf-8') as f:
+                f.writelines(lines)
 
-                window['videoFilter'].update('')
-                window['videos'].update(viewData())
+            print('Playlist downloaded successfully!')
 
-                print('Playlist downloaded successfully!')
-                return
+    return db, currentPlaylist
 
 
 # Delete selected videos
@@ -532,7 +553,7 @@ menu_def = [['File', ['Open playlist', 'New playlist', 'Exit']],
 
 menu_elem = sg.Menu(menu_def)
 
-openPlaylist()
+currentPlaylist, mpvArg, db = openPlaylist()
 Link = Query()
 windowSize = (1280, 810)  # Default window size
 
@@ -841,11 +862,13 @@ while True:
 
     # Download a playlist from Google Sheets
     if event == 'Download playlist':
-        manageGSheets(1, db, currentPlaylist)
+        db, currentPlaylist = downloadGSheets(db, currentPlaylist)
+        window['videoFilter'].update('')
+        window['videos'].update(viewData())
 
     # Upload a playlist into Google Sheets
     if event == 'Upload playlist':
-        manageGSheets(0, db, currentPlaylist)
+        uploadGSheets(currentPlaylist)
 
     if event == 'Readme':
         webbrowser.open('https://github.com/CuriousCod/YoutubePlaylistTool/tree/master')
