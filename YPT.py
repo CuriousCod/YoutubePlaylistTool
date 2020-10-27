@@ -28,6 +28,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # TODO See if audio levels can be normalized -> No easy way to do this
 # DONE db in google sheets
 
+
 def filtering():
 
     global globalOrder
@@ -716,8 +717,8 @@ while True:
         urls = []
 
         for i in filtering():
-            urls.append('https://www.youtube.com/watch?v=' + i[0:11])
-            print('https://www.youtube.com/watch?v=' + i[0:11])
+            urls.append('https://youtu.be/' + i[0:11])
+            print('https://youtu.be/' + i[0:11])
 
         # Run shuffle based on radio button value
         if values['copy method'] is False:
@@ -845,6 +846,9 @@ while True:
 
     if event == 'New playlist':
         db, currentPlaylist = NewPlaylist(db, mpvArg)
+
+        window['videoFilter'].update('')
+        window['videos'].update(viewData())
 
     if event == 'mpv arguments':
         arguments = sg.popup_get_text('Input mpv launch arguments', default_text=mpvArg)
