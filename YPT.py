@@ -195,7 +195,10 @@ def runScript(script):
 
 
 # Create new playlist db
-def NewPlaylist(db, mpvArg):
+def NewPlaylist(mpvArg):
+
+    global db
+
     newPlaylist = sg.popup_get_text('Input playlist name')
 
     if newPlaylist is not None and newPlaylist != '':
@@ -220,11 +223,13 @@ def NewPlaylist(db, mpvArg):
             else:
                 newPlaylist = None
 
-    return db, newPlaylist
+    return newPlaylist
 
 
 # Open playlist db
 def openPlaylist():
+
+    global db
 
     # Check config.ini for playlist name
     if path.exists('config.ini'):
@@ -256,7 +261,7 @@ def openPlaylist():
         currentPlaylist = 'defaultPlaylist.ypl'
         db = TinyDB(currentPlaylist)
 
-    return currentPlaylist, mpvArg, db
+    return currentPlaylist, mpvArg
 
 
 # Add youtube links from the input window
@@ -436,12 +441,15 @@ def uploadGSheets(currentPlaylist):
 
 
 # Download playlist
-def downloadGSheets(db, currentPlaylist):
+def downloadGSheets(currentPlaylist):
+
+    global db
+
     table = accessGSheets()
 
     if table is None:
         print('Couldn\'t access database, canceling...')
-        return db, currentPlaylist
+        return currentPlaylist
 
     # List all the worksheets
     worksheet_list = table.worksheets()
@@ -453,7 +461,7 @@ def downloadGSheets(db, currentPlaylist):
 
     if playlists is None:
         print('No playlists found in database.')
-        return db, currentPlaylist
+        return currentPlaylist
 
     # Create window to display uploaded playlists
     window3 = CreateWindowLayout(2)
@@ -518,10 +526,10 @@ def downloadGSheets(db, currentPlaylist):
 
             print('Playlist downloaded successfully!')
 
-    window['videoFilter'].update('')
-    window['videos'].update(viewData())
+        window['videoFilter'].update('')
+        window['videos'].update(viewData())
 
-    return db, currentPlaylist
+    return currentPlaylist
 
 
 # Delete selected videos
@@ -558,7 +566,7 @@ menu_def = [['File', ['Open playlist', 'New playlist', 'Exit']],
 
 menu_elem = sg.Menu(menu_def)
 
-currentPlaylist, mpvArg, db = openPlaylist()
+currentPlaylist, mpvArg = openPlaylist()
 Link = Query()
 windowSize = (1280, 810)  # Default window size
 
@@ -845,10 +853,7 @@ while True:
                 f.writelines([currentPlaylist, '\n', mpvArg])
 
     if event == 'New playlist':
-        db, currentPlaylist = NewPlaylist(db, mpvArg)
-
-        window['videoFilter'].update('')
-        window['videos'].update(viewData())
+        currentPlaylist = NewPlaylist(mpvArg)
 
     if event == 'mpv arguments':
         arguments = sg.popup_get_text('Input mpv launch arguments', default_text=mpvArg)
@@ -865,10 +870,7 @@ while True:
 
     # Download a playlist from Google Sheets
     if event == 'Download playlist':
-        db, currentPlaylist = downloadGSheets(db, currentPlaylist)
-
-        window['videoFilter'].update('')
-        window['videos'].update(viewData())
+        currentPlaylist = downloadGSheets(currentPlaylist)
 
     # Upload a playlist into Google Sheets
     if event == 'Upload playlist':
