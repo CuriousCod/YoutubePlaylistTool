@@ -34,10 +34,14 @@ def filtering():
     global globalOrder
     combine = []
 
-    videos = db.search((Link.videoId.search(values['videoFilter'], flags=re.IGNORECASE)) |
-                       (Link.videoId.search(values['videoFilter'][-11:], flags=re.IGNORECASE)) |  # For youtube URL
-                       (Link.title.search(values['videoFilter'], flags=re.IGNORECASE)) |
-                       (Link.uploader.search(values['videoFilter'], flags=re.IGNORECASE)))
+    # Replace special characters with a space
+    # These can crash the search
+    filterText = values['videoFilter'].translate({ord(c): " " for c in "!@#$%^&*()[]{};:,./<>?\|`~-=_+"})
+
+    videos = db.search((Link.videoId.search(filterText, flags=re.IGNORECASE)) |
+                       (Link.videoId.search(filterText[-11:], flags=re.IGNORECASE)) |  # For youtube URL
+                       (Link.title.search(filterText, flags=re.IGNORECASE)) |
+                       (Link.uploader.search(filterText, flags=re.IGNORECASE)))
 
     videoData = [i['videoId'] + ' - ' + i['duration'] + ' - ' + i['title'] for i in videos]
 
