@@ -70,9 +70,6 @@ def filtering():
     # Remove ordering from display
     combine = [i[7:] for i in combine]
 
-    #window['up'].update(disabled=True)
-    #window['down'].update(disabled=True)
-
     # List variable for reordering purposes
     # For some reason .sort() also affects the order list <_<
     globalOrder = order
@@ -119,7 +116,7 @@ def viewData():
         combine = [i[7:] for i in combine]
 
         # List variable for reordering purposes
-        # For some reason .sort() also affects the order list <_<
+        # For some reason .sort() also affects the normal order list <_<
         globalOrder = order
         globalOrder.sort()
         globalOrder = list(map(int, globalOrder))
@@ -170,7 +167,7 @@ def CreateWindowLayout(createWindow):
         layout = [
             [sg.Multiline('', key='input', size=(48, 28), enable_events=True, focus=True, right_click_menu=['&Right', ['Paste']])],
             [sg.Button('Extract source', key='add source', size=(18, 2)),
-             sg.Text(size=(16, 1)), sg.Button('Cancel', key='cancel', size=(7, 2)), sg.Button('OK', key='add links', size=(4, 2))]
+             sg.Text(size=(16, 1)), sg.Button('OK', key='add links', size=(4, 2)), sg.Button('Cancel', key='cancel', size=(7, 2))]
         ]
         windowTitle = 'Youtube Playlist Tool - Add Videos'
         return sg.Window(windowTitle, layout, font='Courier 12', modal=True, icon='logo.ico')
@@ -179,9 +176,9 @@ def CreateWindowLayout(createWindow):
     if createWindow == 2:
         layout = [
             [sg.Listbox('', key='playlistInput', size=(48, 28), enable_events=True)],
-            [sg.Text(size=(16, 1)), sg.Button('Cancel', key='cancelPlaylistInput', size=(7, 2)), sg.Button('OK', key='okPlaylistInput', size=(4, 2))]
+            [sg.Text(size=(16, 1)), sg.Button('OK', key='okPlaylistInput', size=(4, 2)), sg.Button('Cancel', key='cancelPlaylistInput', size=(7, 2))]
         ]
-        windowTitle = 'Youtube Playlist Tool - Choose playlist to download'
+        windowTitle = 'Youtube Playlist Tool - Choose a playlist to download'
         return sg.Window(windowTitle, layout, font='Courier 12', modal=True, icon='logo.ico')
 
 
@@ -199,11 +196,11 @@ def runScript(script):
 
 
 # Create new playlist db
-def NewPlaylist(mpvArg):
+def NewPlaylist(mpvArg, name):
 
     global db
 
-    newPlaylist = sg.popup_get_text('Input playlist name')
+    newPlaylist = sg.popup_get_text('Input playlist name', default_text=name)
 
     if newPlaylist is not None and newPlaylist != '':
         if not os.path.isfile(newPlaylist + '.ypl'):
@@ -475,6 +472,7 @@ def downloadGSheets(currentPlaylist):
 
     selectPlaylistVersion = False
     chosenPlaylistRow = None
+    chosenPlaylist = ''
 
     while True:
         event, values = window3.read()
@@ -521,7 +519,7 @@ def downloadGSheets(currentPlaylist):
             lines.append(sheet.cell(chosenPlaylistRow, i + 3).value)
         print(lines)
 
-        db, newPlaylist = NewPlaylist(db, mpvArg)
+        newPlaylist = NewPlaylist(mpvArg, chosenPlaylist)
 
         if newPlaylist is not None:
             currentPlaylist = newPlaylist
@@ -857,7 +855,7 @@ while True:
                 f.writelines([currentPlaylist, '\n', mpvArg])
 
     if event == 'New playlist':
-        currentPlaylist = NewPlaylist(mpvArg)
+        currentPlaylist = NewPlaylist(mpvArg, '')
 
     if event == 'mpv arguments':
         arguments = sg.popup_get_text('Input mpv launch arguments', default_text=mpvArg)
