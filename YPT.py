@@ -372,16 +372,19 @@ def accessGSheets():
     client = gspread.authorize(creds)
 
     # Find a workbook by name
-    table = client.open("YTPDB")
+    try:
+        table = client.open("YTPDB")
+        return table
+    except gspread.exceptions.SpreadsheetNotFound:
+        return None
 
-    return table
 
 # Upload playlist
 def uploadGSheets(currentPlaylist):
     table = accessGSheets()
 
     if table is None:
-        print('Couldn\'t access database, canceling...')
+        print('Couldn\'t access database, cancelling...')
         return
 
     # List all the worksheets
@@ -403,9 +406,14 @@ def uploadGSheets(currentPlaylist):
         sheet = table.worksheet(sheets[sheetIndex])
         newSheet = False
     except ValueError:
-        sheet = table.add_worksheet(title=playlistName, rows=10, cols=10)
-        sheet.insert_row(['DateTime', 'PartCount', 'Data'])
-        newSheet = True
+        try:
+            sheet = table.add_worksheet(title=playlistName, rows=10, cols=10)
+            sheet.insert_row(['DateTime', 'PartCount', 'Data'])
+            newSheet = True
+        except gspread.exceptions.APIError:
+            print('Unable to add new playlist.')
+            print('Do you have permission to edit the database?')
+            return
 
     # Read the playlist into a string
     with open(currentPlaylist, 'r', encoding='utf-8') as f:
@@ -427,7 +435,12 @@ def uploadGSheets(currentPlaylist):
         if previousLines != lines:
 
             # cell = sheet.find(currentPlaylist[currentPlaylist.rfind('/') + 1:-4], in_column=1)
-            sheet.insert_row([dateAndTime, len(lines)], index=2)
+            try:
+                sheet.insert_row([dateAndTime, len(lines)], index=2)
+            except gspread.exceptions.APIError:
+                print('Unable to upload playlist.')
+                print('Do you have permission to edit the database?')
+                return
 
             for count, i in enumerate(lines):
                 sheet.update_cell(2, count + 3, i)
