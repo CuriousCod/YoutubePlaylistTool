@@ -5,7 +5,7 @@ DATA_FILES = ['logo.ico']
 
 setup(
     name='YoutubePlaylistTool',
-    version='1.4.1',
+    version='1.5.0',
     #package_dir= {''},
     #packages=[''],
     data_files=DATA_FILES,

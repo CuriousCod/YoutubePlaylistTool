@@ -2,7 +2,7 @@ import PySimpleGUI as sg
 from tinydb import TinyDB, Query
 import youtube_dl
 from tinydb.operations import set as Set
-import re, time, random, os, sys, webbrowser, subprocess, textwrap, datetime
+import re, time, random, os, sys, webbrowser, subprocess, textwrap, datetime, configparser
 from os import path
 import pyperclip
 import gspread
@@ -14,7 +14,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # DONE File open exception handling
 # DONE Config.ini for default playlist
 # DONE Add confirmation to video delete
-# TODO Add recent playlists feature
+# DONE Add recent playlists feature
 # DONE youtu.be links
 # DONE Tagging -> Added filter for uploaders, tagging is probably not necessary
 # DONE Reorder playlist
@@ -209,8 +209,13 @@ def NewPlaylist(mpvArg, name):
             window['videos'].update(viewData())
             window.TKroot.title('Youtube Playlist Tool - ' + newPlaylist)
 
-            with open('config.ini', 'w', encoding='utf-8') as f:
-                f.writelines([newPlaylist + '.ypl', '\n', mpvArg])
+            config['DEFAULT']['current playlist'] = newPlaylist
+
+            with open('config.ini', 'w') as f:
+                config.write(f)
+
+            #with open('config.ini', 'w', encoding='utf-8') as f:
+                #f.writelines([newPlaylist + '.ypl', '\n', mpvArg])
         else:
             answer = sg.popup_yes_no('Playlist already exists.\nOverwrite?')
             if answer:
@@ -219,33 +224,44 @@ def NewPlaylist(mpvArg, name):
                 window['videos'].update(viewData())
                 window.TKroot.title('Youtube Playlist Tool - ' + newPlaylist)
 
-                with open('config.ini', 'w', encoding='utf-8') as f:
-                    f.writelines([newPlaylist + '.ypl', '\n', mpvArg])
+                config['DEFAULT']['current playlist'] = newPlaylist
+
+                with open('config.ini', 'w') as f:
+                    config.write(f)
+
+                #with open('config.ini', 'w', encoding='utf-8') as f:
+                    #f.writelines([newPlaylist + '.ypl', '\n', mpvArg])
             else:
                 newPlaylist = None
 
     return newPlaylist
 
 
-# Open playlist db
-def openPlaylist():
+def readPlaylistFromConfig():
 
     global db
 
     # Check config.ini for playlist name
-    if path.exists('config.ini'):
-        f = open('config.ini', 'r', encoding='utf-8')
-        currentPlaylist = f.readline().rstrip('\n')
-        mpvArg = f.readline()
+    if path.isfile('config.ini'):
+        #f = open('config.ini', 'r', encoding='utf-8')
+        config.read('config.ini')
+        #currentPlaylist = f.readline().rstrip('\n')
+        currentPlaylist = config['DEFAULT']['current playlist']
+        #mpvArg = f.readline()
+        mpvArg = config['DEFAULT']['mpv arguments']
         if mpvArg == '':
             mpvArg = '--slang=eng,en --fs --fs-screen=2 --sub-font-size=46'
-        f.close()
+        #f.close()
     else:
         currentPlaylist = 'defaultPlaylist.ypl'
         mpvArg = '--slang=eng,en --fs --fs-screen=2 --sub-font-size=46'
-        f = open('config.ini', 'w', encoding='utf-8')
-        f.writelines([currentPlaylist, '\n', mpvArg])
-        f.close()
+        config['DEFAULT']['current playlist'] = currentPlaylist
+        config['DEFAULT']['mpv arguments'] = mpvArg
+        with open('config.ini', 'w') as f:
+            config.write(f)
+        #f = open('config.ini', 'w', encoding='utf-8')
+        #f.writelines([currentPlaylist, '\n', mpvArg])
+        #f.close()
 
     try:
         if currentPlaylist == '':
@@ -536,6 +552,7 @@ def downloadGSheets(currentPlaylist):
 
         if newPlaylist is not None:
             currentPlaylist = newPlaylist
+
             with open(currentPlaylist + '.ypl', 'w', encoding='utf-8') as f:
                 f.writelines(lines)
 
@@ -571,22 +588,47 @@ def deleteVideos():
             window['videos'].update(filtering())
             window['videos'].set_vscroll_position(vpos[0])
 
+# Read config.ini
+def readConfig():
+    try:
+        config.read('config.ini')
+    # Replace old config
+    except configparser.MissingSectionHeaderError:
+        config['DEFAULT'] = {'Current Playlist': '',
+                             'mpv Arguments': '--slang=eng,en --fs --fs-screen=2 --sub-font-size=46'}
+        for i in range(1, 10):
+            config['HISTORY'] = {'Recent Files': ''}
+        with open('config.ini', 'w') as configfile:
+            config.write(configfile)
+            config.read('config.ini')
 
-sg.theme('Topanga')
+    recentFiles = config['HISTORY']['recent files'].split('\n')
+    if recentFiles[0] == '':
+        recentFiles.pop(0)
 
-menu_def = [['File', ['Open playlist', 'New playlist', 'Exit']],
-            ['Settings', ['mpv arguments', 'Shuffle playlist']],
-            ['Sync', ['Upload playlist', 'Download playlist']],
-            ['Help', ['Readme', 'About']], ]
+    return recentFiles
 
-menu_elem = sg.Menu(menu_def)
 
-currentPlaylist, mpvArg = openPlaylist()
+# Initialize stuff
+config = configparser.ConfigParser()
+recentFiles = readConfig()
+currentPlaylist, mpvArg = readPlaylistFromConfig()
 Link = Query()
 windowSize = (1280, 810)  # Default window size
 
 global shufflePlaylist
 shufflePlaylist = False
+
+# Initialize pySimpleGUI
+sg.theme('Topanga')
+
+menu_def = [['File', ['New playlist', 'Open playlist', 'Recent playlists', [recentFiles], 'Exit']],
+            ['Settings', ['mpv arguments', 'Shuffle playlist']],
+            ['Sync', ['Upload playlist', 'Download playlist']],
+            ['Help', ['Readme', 'About']], ]
+
+
+menu_elem = sg.Menu(menu_def)
 
 col1 = [
     [sg.Text('Filter', size=(6, 1)),
@@ -860,12 +902,24 @@ while True:
             print('No file selected!')
         else:
             db = TinyDB(currentPlaylist)
+            config['DEFAULT']['current playlist'] = currentPlaylist
+
+            if currentPlaylist not in recentFiles:
+                if len(recentFiles) > 10:
+                    recentFiles.pop(9)
+                recentFiles.insert(0, currentPlaylist)
+                menu_elem.Update(menu_def)
+            config['HISTORY']['recent files'] = '\n'.join(recentFiles)
+
             window['videoFilter'].update('')
             window['videos'].update(viewData())
             window.TKroot.title('Youtube Playlist Tool - ' + currentPlaylist[currentPlaylist.rfind('/') + 1:-1-3])
 
-            with open('config.ini', 'w', encoding='utf-8') as f:
-                f.writelines([currentPlaylist, '\n', mpvArg])
+            with open('config.ini', 'w',) as f:
+                config.write(f)
+
+            #with open('config.ini', 'w', encoding='utf-8') as f:
+            #    f.writelines([currentPlaylist, '\n', mpvArg])
 
     if event == 'New playlist':
         currentPlaylist = NewPlaylist(mpvArg, '')
@@ -875,8 +929,11 @@ while True:
 
         if arguments is not None:
             mpvArg = arguments
-            with open('config.ini', 'w', encoding='utf-8') as f:
-                f.writelines([currentPlaylist, '\n', mpvArg])
+            config['DEFAULT']['mpv arguments'] = mpvArg
+            #with open('config.ini', 'w', encoding='utf-8') as f:
+            #    f.writelines([currentPlaylist, '\n', mpvArg])
+            with open('config.ini', 'w') as f:
+                config.write(f)
 
     if event == 'Shuffle playlist':
         shufflePlaylist = True
@@ -895,8 +952,35 @@ while True:
         webbrowser.open('https://github.com/CuriousCod/YoutubePlaylistTool/tree/master')
 
     if event == 'About':
-        sg.popup('Youtube Playlist Tool v1.4.1\n\nhttps://github.com/CuriousCod/YoutubePlaylistTool\n',
+        sg.popup('Youtube Playlist Tool v1.5.0\n\nhttps://github.com/CuriousCod/YoutubePlaylistTool\n',
                  title='About', icon='logo.ico')
+
+    # Recent files event
+    for i in recentFiles:
+        if event == i:
+            if os.path.isfile(i):
+                currentPlaylist = i
+                db = TinyDB(currentPlaylist)
+
+                recentFiles.pop(recentFiles.index(i))
+                recentFiles.insert(0, currentPlaylist)
+                menu_elem.Update(menu_def)
+
+                window['videoFilter'].update('')
+                window['videos'].update(viewData())
+                window.TKroot.title('Youtube Playlist Tool - ' + currentPlaylist[currentPlaylist.rfind('/') + 1:-1-3])
+
+                config['DEFAULT']['current playlist'] = currentPlaylist
+                config['HISTORY']['recent files'] = '\n'.join(recentFiles)
+
+                with open('config.ini', 'w') as f:
+                    config.write(f)
+
+                #with open('config.ini', 'w', encoding='utf-8') as f:
+                #    f.writelines([currentPlaylist, '\n', mpvArg])
+                break
+            else:
+                print('Playlist doesn\'t exist.')
 
     # Works perfectly when maximizing window, otherwise only updates when any action is taken in the window
     if windowSize != window.size:
