@@ -23,10 +23,11 @@ from oauth2client.service_account import ServiceAccountCredentials
 # DONE What to do with deleted video order numbers -> Reorder
 # DONE Source file grabbing with Chrome, makes last line garbage -> Culture
 # TODO More dynamic playlist filepath -> partially done, creating new playlist doesn't allow different directory
-# TODO Sort by name
+# TODO Sort by name -> Could work as a radio button in menu
 # TODO Workaround for the command line is too long error
 # TODO See if audio levels can be normalized -> No easy way to do this
 # DONE db in google sheets
+# TODO Option to choose what workbook to use
 
 
 def filtering():
@@ -146,10 +147,10 @@ def extractVideos():
     # Grab all unique matches with the key VideoId and add them to the list
     for match in re.finditer('\"videoId\"', text):
         e = match.end()
-        url = text[e + 2:e + 13]
+        extractedVideoId = text[e + 2:e + 13]
 
-        if url not in links:
-            links.append(url)
+        if extractedVideoId not in links:
+            links.append(extractedVideoId)
 
     # Add youtube url format to the video id
     playlist = ['https://www.youtube.com/watch?v=' + i for i in links]
@@ -196,10 +197,9 @@ def runScript(script):
 
 
 # Create new playlist db
-def NewPlaylist(mpvArg, name):
+def NewPlaylist(name):
 
     global db
-
     newPlaylist = sg.popup_get_text('Input playlist name', default_text=name)
 
     if newPlaylist is not None and newPlaylist != '':
@@ -214,8 +214,6 @@ def NewPlaylist(mpvArg, name):
             with open('config.ini', 'w') as f:
                 config.write(f)
 
-            #with open('config.ini', 'w', encoding='utf-8') as f:
-                #f.writelines([newPlaylist + '.ypl', '\n', mpvArg])
         else:
             answer = sg.popup_yes_no('Playlist already exists.\nOverwrite?')
             if answer:
@@ -229,8 +227,6 @@ def NewPlaylist(mpvArg, name):
                 with open('config.ini', 'w') as f:
                     config.write(f)
 
-                #with open('config.ini', 'w', encoding='utf-8') as f:
-                    #f.writelines([newPlaylist + '.ypl', '\n', mpvArg])
             else:
                 newPlaylist = None
 
@@ -243,15 +239,11 @@ def readPlaylistFromConfig():
 
     # Check config.ini for playlist name
     if path.isfile('config.ini'):
-        #f = open('config.ini', 'r', encoding='utf-8')
         config.read('config.ini')
-        #currentPlaylist = f.readline().rstrip('\n')
         currentPlaylist = config['DEFAULT']['current playlist']
-        #mpvArg = f.readline()
         mpvArg = config['DEFAULT']['mpv arguments']
         if mpvArg == '':
             mpvArg = '--slang=eng,en --fs --fs-screen=2 --sub-font-size=46'
-        #f.close()
     else:
         currentPlaylist = 'defaultPlaylist.ypl'
         mpvArg = '--slang=eng,en --fs --fs-screen=2 --sub-font-size=46'
@@ -259,9 +251,6 @@ def readPlaylistFromConfig():
         config['DEFAULT']['mpv arguments'] = mpvArg
         with open('config.ini', 'w') as f:
             config.write(f)
-        #f = open('config.ini', 'w', encoding='utf-8')
-        #f.writelines([currentPlaylist, '\n', mpvArg])
-        #f.close()
 
     try:
         if currentPlaylist == '':
@@ -548,7 +537,7 @@ def downloadGSheets(currentPlaylist):
             lines.append(sheet.cell(chosenPlaylistRow, i + 3).value)
         print(lines)
 
-        newPlaylist = NewPlaylist(mpvArg, chosenPlaylist)
+        newPlaylist = NewPlaylist(chosenPlaylist)
 
         if newPlaylist is not None:
             currentPlaylist = newPlaylist
@@ -588,6 +577,7 @@ def deleteVideos():
             window['videos'].update(filtering())
             window['videos'].set_vscroll_position(vpos[0])
 
+
 # Read config.ini
 def readConfig():
     try:
@@ -608,6 +598,74 @@ def readConfig():
 
     return recentFiles
 
+# Move video up in listbox
+def sortUp():
+
+    global db
+    selection = values['videos']
+
+    for i in values['videos']:
+
+        # Current selection
+        x = db.get(Link.videoId == i[0:11])
+
+        # Video above the selection
+        # y = db.get(Link.order == str(int(x['order']) - 1))
+        y = db.get(Link.order == str(globalOrder[globalOrder.index(x['order']) - 1]))
+
+        # Check if video is on the top of the list
+        # if y is not None:
+        if globalOrder.index(x['order']) != 0:
+            # db.update(Set('order', str(int(x['order']) - 1)), Link.videoId == x['videoId'])
+            # db.update(Set('order', str(int(y['order']) + 1)), Link.videoId == y['videoId'])
+            db.update(Set('order', str(globalOrder[globalOrder.index(x['order'])])), Link.videoId == y['videoId'])
+            db.update(Set('order', str(globalOrder[globalOrder.index(x['order']) - 1])), Link.videoId == x['videoId'])
+        # else:
+        # break
+
+    vpos = window['videos'].Widget.yview()
+
+    window['videos'].update(filtering())
+    window['videos'].SetValue(selection)
+    window['videos'].set_vscroll_position(vpos[0])
+    window.refresh()
+
+# Move video down in listbox
+def sortDown():
+    global db
+    selection = values['videos']
+
+    # Reverse the list, when traveling downwards
+    for i in reversed(values['videos']):
+
+        # Current selection
+        x = db.get(Link.videoId == i[0:11])
+
+        # Video below the selection
+        # y = db.get(Link.order == str(int(x['order']) + 1))
+        try:
+            y = db.get(Link.order == str(globalOrder[globalOrder.index(x['order']) + 1]))
+
+            # Old way to check if video is on the bottom of the list, doesn't actually do anything atm
+            if y is not None:
+                # db.update(Set('order', str(int(x['order']) + 1)), Link.videoId == x['videoId'])
+                # db.update(Set('order', str(int(y['order']) - 1)), Link.videoId == y['videoId'])
+                db.update(Set('order', str(globalOrder[globalOrder.index(x['order'])])), Link.videoId == y['videoId'])
+                db.update(Set('order', str(globalOrder[globalOrder.index(x['order']) + 1])),
+                          Link.videoId == x['videoId'])
+            # else:
+            #   break
+
+        # When at the bottom of the list, interestingly this exception this doesn't occur on the top of the list
+        except IndexError:
+            continue
+
+    vpos = window['videos'].Widget.yview()
+
+    window['videos'].update(filtering())
+    window['videos'].SetValue(selection)
+    window['videos'].set_vscroll_position(vpos[0])
+    window.refresh()
 
 # Initialize stuff
 config = configparser.ConfigParser()
@@ -815,8 +873,7 @@ while True:
             playlistUrl = 'http://www.youtube.com/watch_videos?video_ids=' + ','.join(urls[i:i + 50])
             print(playlistUrl + '\n')
 
-
-    # For running db scripts
+    # For running db scripts, hidden in normal circumstances
     if event == 'Script':
         runScript(2)
 
@@ -825,69 +882,10 @@ while True:
         clear()
 
     if event == 'up':
-
-        selection = values['videos']
-
-        for i in values['videos']:
-
-            # Current selection
-            x = db.get(Link.videoId == i[0:11])
-
-            # Video above the selection
-            #y = db.get(Link.order == str(int(x['order']) - 1))
-            y = db.get(Link.order == str(globalOrder[globalOrder.index(x['order']) - 1]))
-
-            # Check if video is on the top of the list
-            #if y is not None:
-            if globalOrder.index(x['order']) != 0:
-                #db.update(Set('order', str(int(x['order']) - 1)), Link.videoId == x['videoId'])
-                #db.update(Set('order', str(int(y['order']) + 1)), Link.videoId == y['videoId'])
-                db.update(Set('order', str(globalOrder[globalOrder.index(x['order'])])), Link.videoId == y['videoId'])
-                db.update(Set('order', str(globalOrder[globalOrder.index(x['order']) - 1])), Link.videoId == x['videoId'])
-            #else:
-                #break
-
-        vpos = window['videos'].Widget.yview()
-
-        window['videos'].update(filtering())
-        window['videos'].SetValue(selection)
-        window['videos'].set_vscroll_position(vpos[0])
-        window.refresh()
+        sortUp()
 
     if event == 'down':
-
-        selection = values['videos']
-
-        # Reverse the list, when traveling downwards
-        for i in reversed(values['videos']):
-
-            # Current selection
-            x = db.get(Link.videoId == i[0:11])
-
-            # Video below the selection
-            #y = db.get(Link.order == str(int(x['order']) + 1))
-            try:
-                y = db.get(Link.order == str(globalOrder[globalOrder.index(x['order']) + 1]))
-
-                # Old way to check if video is on the bottom of the list, doesn't actually do anything atm
-                if y is not None:
-                    #db.update(Set('order', str(int(x['order']) + 1)), Link.videoId == x['videoId'])
-                    #db.update(Set('order', str(int(y['order']) - 1)), Link.videoId == y['videoId'])
-                    db.update(Set('order', str(globalOrder[globalOrder.index(x['order'])])), Link.videoId == y['videoId'])
-                    db.update(Set('order', str(globalOrder[globalOrder.index(x['order']) + 1])), Link.videoId == x['videoId'])
-                #else:
-                 #   break
-
-            # When at the bottom of the list, interestingly this exception this doesn't occur on the top of the list
-            except IndexError:
-                continue
-
-        vpos = window['videos'].Widget.yview()
-
-        window['videos'].update(filtering())
-        window['videos'].SetValue(selection)
-        window['videos'].set_vscroll_position(vpos[0])
-        window.refresh()
+        sortDown()
 
     if event == 'videoFilter':
         if len(values['videoFilter']) > 2:
@@ -918,11 +916,8 @@ while True:
             with open('config.ini', 'w',) as f:
                 config.write(f)
 
-            #with open('config.ini', 'w', encoding='utf-8') as f:
-            #    f.writelines([currentPlaylist, '\n', mpvArg])
-
     if event == 'New playlist':
-        currentPlaylist = NewPlaylist(mpvArg, '')
+        currentPlaylist = NewPlaylist('')
 
     if event == 'mpv arguments':
         arguments = sg.popup_get_text('Input mpv launch arguments', default_text=mpvArg)
@@ -930,8 +925,6 @@ while True:
         if arguments is not None:
             mpvArg = arguments
             config['DEFAULT']['mpv arguments'] = mpvArg
-            #with open('config.ini', 'w', encoding='utf-8') as f:
-            #    f.writelines([currentPlaylist, '\n', mpvArg])
             with open('config.ini', 'w') as f:
                 config.write(f)
 
@@ -975,19 +968,16 @@ while True:
 
                 with open('config.ini', 'w') as f:
                     config.write(f)
-
-                #with open('config.ini', 'w', encoding='utf-8') as f:
-                #    f.writelines([currentPlaylist, '\n', mpvArg])
                 break
             else:
                 print('Playlist doesn\'t exist.')
 
     # Works perfectly when maximizing window, otherwise only updates when any action is taken in the window
     if windowSize != window.size:
-        print(window.size)
+        #print(window.size)
         CurrentWindowSize = window.size
         VideosElementSize = (int(CurrentWindowSize[0] * 0.1), int(CurrentWindowSize[1] * 0.045))
-        print(VideosElementSize)
+        #print(VideosElementSize)
         window['videos'].set_size(VideosElementSize)
         windowSize = window.size
 
