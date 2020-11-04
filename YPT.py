@@ -580,23 +580,34 @@ def deleteVideos():
 
 # Read config.ini
 def readConfig():
+
+    if not os.path.isfile('config.ini'):
+        writeDefaultConfig()
+
     try:
         config.read('config.ini')
     # Replace old config
     except configparser.MissingSectionHeaderError:
-        config['DEFAULT'] = {'Current Playlist': '',
-                             'mpv Arguments': '--slang=eng,en --fs --fs-screen=2 --sub-font-size=46'}
-        for i in range(1, 10):
-            config['HISTORY'] = {'Recent Files': ''}
-        with open('config.ini', 'w') as configfile:
-            config.write(configfile)
-            config.read('config.ini')
+        writeDefaultConfig()
 
     recentFiles = config['HISTORY']['recent files'].split('\n')
+
+    # If there are no recent file entries, remove empty entry
     if recentFiles[0] == '':
         recentFiles.pop(0)
 
     return recentFiles
+
+
+def writeDefaultConfig():
+    config['DEFAULT'] = {'Current Playlist': '',
+                         'mpv Arguments': '--slang=eng,en --fs --fs-screen=2 --sub-font-size=46'}
+    for i in range(1, 10):
+        config['HISTORY'] = {'Recent Files': ''}
+    with open('config.ini', 'w') as configfile:
+        config.write(configfile)
+        config.read('config.ini')
+
 
 # Move video up in listbox
 def sortUp():
