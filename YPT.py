@@ -2,7 +2,7 @@ import PySimpleGUI as sg
 from tinydb import TinyDB, Query
 import youtube_dl
 from tinydb.operations import set as Set
-import re, time, random, os, sys, webbrowser, subprocess, textwrap, datetime, configparser
+import re, time, random, os, sys, webbrowser, subprocess, textwrap, datetime, configparser, atexit
 from os import path
 import pyperclip
 import gspread
@@ -19,12 +19,12 @@ from oauth2client.service_account import ServiceAccountCredentials
 # DONE Tagging -> Added filter for uploaders, tagging is probably not necessary
 # DONE Reorder playlist
 # DONE Fix reordering bugs: Behavior during filtering
-# TODO Remove copy order commands and switch it to displaying the list in random or default order
+# TODO Switch copy order buttons to display the list in random or default order -> Basically sort options
 # DONE What to do with deleted video order numbers -> Reorder
 # DONE Source file grabbing with Chrome, makes last line garbage -> Culture
 # TODO More dynamic playlist filepath -> partially done, creating new playlist doesn't allow different directory
-# TODO Sort by name -> Could work as a radio button in menu
-# TODO Workaround for the command line is too long error
+# TODO Sort by name -> Could work as a radio button in menu -> Same as other todo entry
+# DONE Workaround for the command line is too long error -> .bat file
 # TODO See if audio levels can be normalized -> No easy way to do this
 # DONE db in google sheets
 # TODO Option to choose what workbook to use
@@ -678,12 +678,19 @@ def sortDown():
     window['videos'].set_vscroll_position(vpos[0])
     window.refresh()
 
+
+# Clean files when exiting app
+def onExitApp():
+    os.remove('playWithMPV.bat')
+
+
 # Initialize stuff
 config = configparser.ConfigParser()
 recentFiles = readConfig()
 currentPlaylist, mpvArg = readPlaylistFromConfig()
 Link = Query()
 windowSize = (1280, 810)  # Default window size
+atexit.register(onExitApp)
 
 global shufflePlaylist
 shufflePlaylist = False
@@ -717,7 +724,7 @@ layout = [
     [sg.Listbox(values=viewData(), key='videos', size=(130, 36), enable_events=True,
                 right_click_menu=['&Right', ['Copy URL', 'Open URL', 'Play with mpv', 'Delete video(s)']],
                 select_mode='extended')],
-    [sg.Column(col1)], # sg.Text(' Tags', size=(6, 1))], sg.Multiline(size=(20, 2), enable_events=True, key='tags')],
+    [sg.Column(col1)],  # sg.Text(' Tags', size=(6, 1))], sg.Multiline(size=(20, 2), enable_events=True, key='tags')],
     #[sg.Text('')],
     [
     #sg.Button('Copy Random', key='copy random'),
@@ -841,7 +848,11 @@ while True:
 
         urls = ' '.join(urls)
 
-        subprocess.Popen('mpv ' + mpvArg + ' ' + urls, shell=True)
+        with open('playWithMPV.bat', 'w', encoding='utf-8') as f:
+            f.writelines('mpv ' + mpvArg + ' ' + urls)
+
+        #subprocess.Popen('mpv ' + mpvArg + ' ' + urls, shell=True)
+        subprocess.Popen('playWithMPV.bat', shell=True)
 
     if event == 'Delete video(s)':
         deleteVideos()
