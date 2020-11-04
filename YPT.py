@@ -16,14 +16,14 @@ from oauth2client.service_account import ServiceAccountCredentials
 # DONE Add confirmation to video delete
 # DONE Add recent playlists feature
 # DONE youtu.be links
-# DONE Tagging -> Added filter for uploaders, tagging is probably not necessary
+# DONE Tagging -> Added filter for uploader, tagging is probably not necessary
 # DONE Reorder playlist
 # DONE Fix reordering bugs: Behavior during filtering
 # TODO Switch copy order buttons to display the list in random or default order -> Basically sort options
 # DONE What to do with deleted video order numbers -> Reorder
 # DONE Source file grabbing with Chrome, makes last line garbage -> Culture
 # TODO More dynamic playlist filepath -> partially done, creating new playlist doesn't allow different directory
-# TODO Sort by name -> Could work as a radio button in menu -> Same as other todo entry
+# TODO Sort by name -> Could work as a radio button in menu -> Same as the other todo entry
 # DONE Workaround for the command line is too long error -> .bat file
 # TODO See if audio levels can be normalized -> No easy way to do this
 # DONE db in google sheets
@@ -247,10 +247,7 @@ def readPlaylistFromConfig():
     else:
         currentPlaylist = 'defaultPlaylist.ypl'
         mpvArg = '--slang=eng,en --fs --fs-screen=2 --sub-font-size=46'
-        config['DEFAULT']['current playlist'] = currentPlaylist
         config['DEFAULT']['mpv arguments'] = mpvArg
-        with open('config.ini', 'w') as f:
-            config.write(f)
 
     try:
         if currentPlaylist == '':
@@ -266,6 +263,10 @@ def readPlaylistFromConfig():
         print('Invalid playlist filename in config.ini\nUsing defaultPlaylist.ypl')
         currentPlaylist = 'defaultPlaylist.ypl'
         db = TinyDB(currentPlaylist)
+
+    config['DEFAULT']['current playlist'] = currentPlaylist
+    with open('config.ini', 'w') as f:
+        config.write(f)
 
     return currentPlaylist, mpvArg
 
@@ -681,7 +682,8 @@ def sortDown():
 
 # Clean files when exiting app
 def onExitApp():
-    os.remove('playWithMPV.bat')
+    if os.path.isfile('playWithMPV.bat'):
+        os.remove('playWithMPV.bat')
 
 
 # Initialize stuff
