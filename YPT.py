@@ -28,6 +28,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # TODO See if audio levels can be normalized -> No easy way to do this
 # DONE db in google sheets
 # TODO Option to choose what workbook to use
+# TODO Option to close previous player, when sending a new play command
 
 
 def filtering():
