@@ -74,8 +74,7 @@ def filtering():
 
     # List variable for reordering purposes
     # For some reason .sort() also affects the order list <_<
-    globalOrder = order
-    globalOrder.sort()
+    globalOrder = sorted(order)
     globalOrder = list(map(int, globalOrder))
     globalOrder = list(map(str, globalOrder))
 
@@ -94,6 +93,21 @@ def viewData():
       #  combine.append(x['videoId'] + ' - ' + x['duration'] + ' - ' + x['title'])
 
     videoData = [i['videoId'] + ' - ' + i['duration'] + ' - ' + i['title'] for i in db]
+
+    # WIP improved video data query
+    """
+    vD = {}
+    for e, x in enumerate(db):
+        # Converting order to float to fix sorting
+        vD[e + 1] = {'videoId': x['videoId'], 'duration': x['duration'], 'title': x['title'], 'order': float(x['order'])}
+    print(vD)
+
+    from collections import OrderedDict
+    from operator import getitem
+    for i in OrderedDict(sorted(vD.items(), key=lambda x: getitem(x[1], 'order'))):
+        print(vD[i]['title'])
+        print(vD[i]['order'])
+    """
 
     # Grabbing video order info and formatting it into 0000
     # This is actually faster than searching through the database for the video order
@@ -119,8 +133,7 @@ def viewData():
 
         # List variable for reordering purposes
         # For some reason .sort() also affects the normal order list <_<
-        globalOrder = order
-        globalOrder.sort()
+        globalOrder = sorted(order)
         globalOrder = list(map(int, globalOrder))
         globalOrder = list(map(str, globalOrder))
 
@@ -704,7 +717,9 @@ sg.theme('Topanga')
 menu_def = [['File', ['New playlist', 'Open playlist', 'Recent playlists', [recentFiles], 'Exit']],
             ['Settings', ['mpv arguments', 'Shuffle playlist']],
             ['Sync', ['Upload playlist', 'Download playlist']],
+            #['Videos', ['Add Videos', 'Update Video Data', 'Copy Videos to Clipboard']],
             ['Help', ['Readme', 'About']], ]
+
 
 
 menu_elem = sg.Menu(menu_def)
@@ -744,7 +759,7 @@ while True:
     if event == sg.WIN_CLOSED or event == 'Exit':  # if user closes window or clicks cancel
         break
 
-    if event == 'Add':
+    if event == 'Add' or event == 'Add Videos':
         window2 = CreateWindowLayout(1)
         window2.finalize()
 
@@ -825,7 +840,7 @@ while True:
         except IndexError:
             print('List is empty!')
 
-    if event == 'Update':
+    if event == 'Update' or event == 'Update Video Data':
         update()
 
     if event == 'Copy URL':
@@ -860,7 +875,7 @@ while True:
     if event == 'Delete video(s)':
         deleteVideos()
 
-    if event == 'Copy':
+    if event == 'Copy' or event == 'Copy Videos to Clipboard':
 
         urls = []
 
