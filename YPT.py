@@ -4,6 +4,8 @@ import youtube_dl
 from tinydb.operations import set as Set
 import re, time, random, os, sys, webbrowser, subprocess, textwrap, datetime, configparser, atexit
 from os import path
+from collections import OrderedDict
+from operator import getitem
 import pyperclip
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
@@ -34,6 +36,8 @@ from oauth2client.service_account import ServiceAccountCredentials
 def filtering():
 
     global globalOrder
+    globalOrder = []
+    vD = {}
     combine = []
 
     # Replace special characters with a space
@@ -45,6 +49,23 @@ def filtering():
                        (Link.title.search(filterText, flags=re.IGNORECASE)) |
                        (Link.uploader.search(filterText, flags=re.IGNORECASE)))
 
+    for e, x in enumerate(videos):
+        # Converting order to float to fix sorting
+        vD[e + 1] = {'videoId': x['videoId'], 'duration': x['duration'], 'title': x['title'], 'order': float(x['order'])}
+
+    for i in OrderedDict(sorted(vD.items(), key=lambda x: getitem(x[1], 'order'))):
+        combine.append(vD[i]['videoId'] + ' - ' + vD[i]['duration'] + ' - ' + vD[i]['title'])
+        # Convert float -> int -> str
+        # Variable used for manual sorting
+        globalOrder.append(str(int(vD[i]['order'])))
+
+    # Quick Shuffle
+    if shufflePlaylist is True:
+        random.shuffle(combine)
+
+    return combine
+
+    """
     videoData = [i['videoId'] + ' - ' + i['duration'] + ' - ' + i['title'] for i in videos]
 
     # Grabbing video order info and formatting it into 0000
@@ -79,36 +100,45 @@ def filtering():
     globalOrder = list(map(str, globalOrder))
 
     return combine
+    """
 
 
 def viewData():
 
     global globalOrder
+    globalOrder = []
+    vD = {}
     combine = []
 
-    # Get total db entries and sort by order, this is slow
-    #for i in range(len(db))[1:]:
-     #   x = db.get(Link.order == str(i))
+    try:
+        # Add all videos in db to a dictionary
+        for e, x in enumerate(db):
+            # Converting order to float to fix sorting
+            vD[e + 1] = {'videoId': x['videoId'], 'duration': x['duration'], 'title': x['title'], 'order': float(x['order'])}
 
-      #  combine.append(x['videoId'] + ' - ' + x['duration'] + ' - ' + x['title'])
+        # Sort dictionary based on key and add to a list
+        for i in OrderedDict(sorted(vD.items(), key=lambda x: getitem(x[1], 'order'))):
+            #print(vD[i]['title'])
+            #print(vD[i]['order'])
+            combine.append(vD[i]['videoId'] + ' - ' + vD[i]['duration'] + ' - ' + vD[i]['title'])
+            # Convert float -> int -> str
+            # Variable used for manual sorting
+            globalOrder.append(str(int(vD[i]['order'])))
 
+        # Quick Shuffle
+        if shufflePlaylist is True:
+            random.shuffle(combine)
+
+    # In case of missing video order information run script
+    except KeyError:
+        runScript(2)
+        viewData()
+
+    return combine
+
+    """
     videoData = [i['videoId'] + ' - ' + i['duration'] + ' - ' + i['title'] for i in db]
-
-    # WIP improved video data query
-    """
-    vD = {}
-    for e, x in enumerate(db):
-        # Converting order to float to fix sorting
-        vD[e + 1] = {'videoId': x['videoId'], 'duration': x['duration'], 'title': x['title'], 'order': float(x['order'])}
-    print(vD)
-
-    from collections import OrderedDict
-    from operator import getitem
-    for i in OrderedDict(sorted(vD.items(), key=lambda x: getitem(x[1], 'order'))):
-        print(vD[i]['title'])
-        print(vD[i]['order'])
-    """
-
+    
     # Grabbing video order info and formatting it into 0000
     # This is actually faster than searching through the database for the video order
     try:
@@ -132,18 +162,14 @@ def viewData():
         combine = [i[7:] for i in combine]
 
         # List variable for reordering purposes
+        # Convert to int first to remove extra 0000 from order number
         # For some reason .sort() also affects the normal order list <_<
         globalOrder = sorted(order)
         globalOrder = list(map(int, globalOrder))
         globalOrder = list(map(str, globalOrder))
 
-    # In case of missing video order information run script
-    except KeyError:
-        runScript(2)
-        viewData()
-
     return combine
-
+    """
 
 def extractVideos():
     text = pyperclip.paste()
