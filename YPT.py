@@ -1,6 +1,6 @@
 import PySimpleGUI as sg
 from tinydb import TinyDB, Query
-import youtube_dl
+import youtube_dlc as youtube_dl
 from tinydb.operations import set as Set
 import re, time, random, os, sys, webbrowser, subprocess, textwrap, datetime, configparser, atexit
 from os import path
