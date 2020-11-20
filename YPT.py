@@ -249,7 +249,7 @@ def NewPlaylist(name):
             window['videos'].update(viewData())
             window.TKroot.title('Youtube Playlist Tool - ' + newPlaylist)
 
-            config['DEFAULT']['current playlist'] = newPlaylist
+            config['DEFAULT']['current playlist'] = newPlaylist + '.ypl'
 
             with open('config.ini', 'w') as f:
                 config.write(f)
@@ -262,7 +262,7 @@ def NewPlaylist(name):
                 window['videos'].update(viewData())
                 window.TKroot.title('Youtube Playlist Tool - ' + newPlaylist)
 
-                config['DEFAULT']['current playlist'] = newPlaylist
+                config['DEFAULT']['current playlist'] = newPlaylist + '.ypl'
 
                 with open('config.ini', 'w') as f:
                     config.write(f)
