@@ -9,7 +9,7 @@ setup(
     #package_dir= {''},
     #packages=[''],
     data_files=DATA_FILES,
-    install_requires=['PySimpleGUI', 'tinydb', 'youtube_dlc', 'pyperclip', 'gspread', 'oauth2client'],
+    install_requires=['PySimpleGUI', 'tinydb', 'youtube_dl', 'pyperclip', 'gspread', 'oauth2client'],
     py_modules=['YPT'],
     url='https://github.com/CuriousCod/YoutubePlaylistTool',
     license='',

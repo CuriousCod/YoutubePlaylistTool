@@ -1,6 +1,6 @@
 import PySimpleGUI as sg
 from tinydb import TinyDB, Query
-import youtube_dlc as youtube_dl
+import youtube_dl
 from tinydb.operations import set as Set
 import re, time, random, os, sys, webbrowser, subprocess, textwrap, datetime, configparser, atexit
 from os import path
@@ -855,12 +855,14 @@ while True:
                     data = db.get(Link.videoId == videoId)
                     print(data)
                     print('https://www.youtube.com/watch?v=' + data.get('videoId'))
+
+                    # TODO This can also pop the same AttributeError exception, if youtube-dl doesn't work properly
                     print(data.get('title'))
                     print(data.get('thumbnail'))
                     print(data.get('duration'))
                     print(data.get('uploader'))
 
-                except AttributeError:
+                except AttributeError as e:
                     print('Unable to find db entry')
 
         except IndexError:
