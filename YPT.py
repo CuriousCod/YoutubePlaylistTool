@@ -1,9 +1,8 @@
 import PySimpleGUI as sg
 from tinydb import TinyDB, Query
-import youtube_dl
+import youtube_dlc as youtube_dl
 from tinydb.operations import set as Set
 import re, time, random, os, sys, webbrowser, subprocess, textwrap, datetime, configparser, atexit
-from os import path
 from collections import OrderedDict
 from operator import getitem
 import pyperclip
@@ -65,43 +64,6 @@ def filtering():
 
     return combine
 
-    """
-    videoData = [i['videoId'] + ' - ' + i['duration'] + ' - ' + i['title'] for i in videos]
-
-    # Grabbing video order info and formatting it into 0000
-    # This is actually faster than searching through the database for the video order
-    order = [int(i['order']) for i in videos]
-
-    # Quick Shuffle
-    if shufflePlaylist is True:
-        random.shuffle(order)
-
-    # Format to 0000
-    order = ["%04d" % i for i in order]
-
-    # Combining formatted ordering into the video list, old solution
-#    for (item1, item2) in zip(order, videoData):
-#        combine.append(item1 + ' - ' + item2)
-
-    # Combining formatted ordering into the video list
-    for x in range(len(order)):
-        combine.append(order[x] + ' - ' + videoData[x])
-
-    # Sorting based on order
-    combine.sort()
-
-    # Remove ordering from display
-    combine = [i[7:] for i in combine]
-
-    # List variable for reordering purposes
-    # For some reason .sort() also affects the order list <_<
-    globalOrder = sorted(order)
-    globalOrder = list(map(int, globalOrder))
-    globalOrder = list(map(str, globalOrder))
-
-    return combine
-    """
-
 
 def viewData():
 
@@ -136,40 +98,6 @@ def viewData():
 
     return combine
 
-    """
-    videoData = [i['videoId'] + ' - ' + i['duration'] + ' - ' + i['title'] for i in db]
-    
-    # Grabbing video order info and formatting it into 0000
-    # This is actually faster than searching through the database for the video order
-    try:
-        order = [int(i['order']) for i in db]
-
-        # Quick Shuffle
-        if shufflePlaylist is True:
-            random.shuffle(order)
-
-        # Format to 0000
-        order = ["%04d" % i for i in order]
-
-        # Combining formatted ordering into the video list
-        for (item1, item2) in zip(order, videoData):
-            combine.append(item1 + ' - ' + item2)
-
-        # Sorting videos based on order
-        combine.sort()
-
-        # Remove ordering from display
-        combine = [i[7:] for i in combine]
-
-        # List variable for reordering purposes
-        # Convert to int first to remove extra 0000 from order number
-        # For some reason .sort() also affects the normal order list <_<
-        globalOrder = sorted(order)
-        globalOrder = list(map(int, globalOrder))
-        globalOrder = list(map(str, globalOrder))
-
-    return combine
-    """
 
 def extractVideos():
     text = pyperclip.paste()
@@ -243,13 +171,14 @@ def NewPlaylist(name):
     newPlaylist = sg.popup_get_text('Input playlist name', default_text=name)
 
     if newPlaylist is not None and newPlaylist != '':
-        if not os.path.isfile(newPlaylist + '.ypl'):
-            db = TinyDB(newPlaylist + '.ypl')
+        newPlaylist = f"{os.getcwd()}\\{newPlaylist}.ypl"
+        if not os.path.isfile(newPlaylist):
+            db = TinyDB(newPlaylist)
             window['videoFilter'].update('')
             window['videos'].update(viewData())
-            window.TKroot.title('Youtube Playlist Tool - ' + newPlaylist)
+            window.TKroot.title('Youtube Playlist Tool - ' + os.path.basename(newPlaylist)[:-4])
 
-            config['DEFAULT']['current playlist'] = newPlaylist + '.ypl'
+            config['DEFAULT']['current playlist'] = newPlaylist
 
             with open('config.ini', 'w') as f:
                 config.write(f)
@@ -257,12 +186,12 @@ def NewPlaylist(name):
         else:
             answer = sg.popup_yes_no('Playlist already exists.\nOverwrite?')
             if answer:
-                db = TinyDB(newPlaylist + '.ypl')
+                db = TinyDB(newPlaylist)
                 window['videoFilter'].update('')
                 window['videos'].update(viewData())
-                window.TKroot.title('Youtube Playlist Tool - ' + newPlaylist)
+                window.TKroot.title('Youtube Playlist Tool - ' + os.path.basename(newPlaylist)[:-4])
 
-                config['DEFAULT']['current playlist'] = newPlaylist + '.ypl'
+                config['DEFAULT']['current playlist'] = newPlaylist
 
                 with open('config.ini', 'w') as f:
                     config.write(f)
@@ -278,30 +207,30 @@ def readPlaylistFromConfig():
     global db
 
     # Check config.ini for playlist name
-    if path.isfile('config.ini'):
+    if os.path.isfile('config.ini'):
         config.read('config.ini')
         currentPlaylist = config['DEFAULT']['current playlist']
         mpvArg = config['DEFAULT']['mpv arguments']
         if mpvArg == '':
             mpvArg = '--slang=eng,en --fs --fs-screen=2 --sub-font-size=46'
     else:
-        currentPlaylist = 'defaultPlaylist.ypl'
+        currentPlaylist = f"{os.getcwd()}/defaultPlaylist.ypl"
         mpvArg = '--slang=eng,en --fs --fs-screen=2 --sub-font-size=46'
         config['DEFAULT']['mpv arguments'] = mpvArg
 
     try:
         if currentPlaylist == '':
             print('No playlist found in config.ini\nUsing defaultPlaylist.ypl')
-            currentPlaylist = 'defaultPlaylist.ypl'
+            currentPlaylist = f"{os.getcwd()}\\defaultPlaylist.ypl"
     except FileNotFoundError:
         print('Playlist ' + currentPlaylist + ' not found\nUsing defaultPlaylist.ypl')
-        currentPlaylist = 'defaultPlaylist.ypl'
+        currentPlaylist = f"{os.getcwd()}\\defaultPlaylist.ypl"
 
     try:
         db = TinyDB(currentPlaylist)
     except OSError:
         print('Invalid playlist filename in config.ini\nUsing defaultPlaylist.ypl')
-        currentPlaylist = 'defaultPlaylist.ypl'
+        currentPlaylist = f"{os.getcwd()}\\defaultPlaylist.ypl"
         db = TinyDB(currentPlaylist)
 
     config['DEFAULT']['current playlist'] = currentPlaylist
@@ -411,7 +340,7 @@ def accessGSheets():
         creds = ServiceAccountCredentials.from_json_keyfile_name('client_secret.json', scope)
     except FileNotFoundError:
         print('client_secret.json not found!')
-        print('Do you have rights to access the database?')
+        print('Do you have the rights to access the database?')
         return None
 
     # authorize the clientsheet
@@ -444,7 +373,7 @@ def uploadGSheets(currentPlaylist):
     for i in worksheet_list:
         sheets.append(i.title)
 
-    playlistName = currentPlaylist[currentPlaylist.rfind('/') + 1:-4]
+    playlistName = os.path.basename(currentPlaylist[:-4])
 
     # Check if there is a sheet for the playlist
     try:
@@ -583,7 +512,7 @@ def downloadGSheets(currentPlaylist):
         if newPlaylist is not None:
             currentPlaylist = newPlaylist
 
-            with open(currentPlaylist + '.ypl', 'w', encoding='utf-8') as f:
+            with open(currentPlaylist, 'w', encoding='utf-8') as f:
                 f.writelines(lines)
 
             print('Playlist downloaded successfully!')
@@ -777,7 +706,7 @@ layout = [
 ]
 
 global window
-window = sg.Window('Youtube Playlist Tool - ' + currentPlaylist[currentPlaylist.rfind('/') + 1:-1-3], layout, font='Courier 12', size=(windowSize),
+window = sg.Window(f"Youtube Playlist Tool - {os.path.basename(currentPlaylist[:-4])}", layout, font='Courier 12', size=(windowSize),
                    resizable=True, icon='logo.ico').finalize()
 
 while True:
@@ -979,7 +908,7 @@ while True:
 
             window['videoFilter'].update('')
             window['videos'].update(viewData())
-            window.TKroot.title('Youtube Playlist Tool - ' + currentPlaylist[currentPlaylist.rfind('/') + 1:-1-3])
+            window.TKroot.title(f"Youtube Playlist Tool - {os.path.basename(currentPlaylist[:-4])} ")
 
             with open('config.ini', 'w',) as f:
                 config.write(f)
@@ -1029,7 +958,7 @@ while True:
 
                 window['videoFilter'].update('')
                 window['videos'].update(viewData())
-                window.TKroot.title('Youtube Playlist Tool - ' + currentPlaylist[currentPlaylist.rfind('/') + 1:-1-3])
+                window.TKroot.title(f"Youtube Playlist Tool - {os.path.basename(currentPlaylist[:-4])}")
 
                 config['DEFAULT']['current playlist'] = currentPlaylist
                 config['HISTORY']['recent files'] = '\n'.join(recentFiles)
