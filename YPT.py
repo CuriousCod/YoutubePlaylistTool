@@ -5,6 +5,7 @@ from tinydb.operations import set as Set
 import re, time, random, os, sys, webbrowser, subprocess, textwrap, datetime, configparser, atexit
 from collections import OrderedDict
 from operator import getitem
+from enum import Enum
 import pyperclip
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
@@ -32,74 +33,13 @@ from oauth2client.service_account import ServiceAccountCredentials
 # TODO Option to choose what workbook to use
 # TODO Option to close previous player, when sending a new play command
 
-
-def filtering(values, Link, db):
-    global globalOrder
-    globalOrder = []
-    vD = {}
-    combine = []
-
-    # Replace special characters with a space
-    # These can crash the search
-    filterText = values['videoFilter'].translate({ord(c): " " for c in "!@#$%^&*()[]{};:,./<>?\|`~-=_+"})
-
-    videos = db.search((Link.videoId.search(filterText, flags=re.IGNORECASE)) |
-                       (Link.videoId.search(filterText[-11:], flags=re.IGNORECASE)) |  # For youtube URL
-                       (Link.title.search(filterText, flags=re.IGNORECASE)) |
-                       (Link.uploader.search(filterText, flags=re.IGNORECASE)))
-
-    for e, x in enumerate(videos):
-        # Converting order to float to fix sorting
-        vD[e + 1] = {'videoId': x['videoId'], 'duration': x['duration'], 'title': x['title'],
-                     'order': float(x['order'])}
-
-    for i in OrderedDict(sorted(vD.items(), key=lambda x: getitem(x[1], 'order'))):
-        combine.append(f"{vD[i]['videoId']} - {vD[i]['duration']} - {vD[i]['title']}")
-        # Convert float -> int -> str
-        # Variable used for manual sorting
-        globalOrder.append(str(int(vD[i]['order'])))
-
-    # Quick Shuffle
-    if shufflePlaylist is True:
-        random.shuffle(combine)
-
-    return combine
+class WindowTypes(Enum):
+    LINK_WINDOW = 1
+    DOWNLOAD_WINDOW = 2
 
 
-def viewData(db):
-    global globalOrder
-    globalOrder = []
-    vD = {}
-    combine = []
-
-    try:
-        # Add all videos in db to a dictionary
-        for e, x in enumerate(db):
-            # Converting order to float to fix sorting
-            vD[e + 1] = {'videoId': x['videoId'], 'duration': x['duration'], 'title': x['title'],
-                         'order': float(x['order'])}
-
-        # Sort dictionary based on key and add to a list
-        for i in OrderedDict(sorted(vD.items(), key=lambda x: getitem(x[1], 'order'))):
-            # print(vD[i]['title'])
-            # print(vD[i]['order'])
-            combine.append(f"{vD[i]['videoId']} - {vD[i]['duration']} - {vD[i]['title']}")
-            # Convert float -> int -> str
-            # Variable used for manual sorting
-            globalOrder.append(str(int(vD[i]['order'])))
-
-        # Quick Shuffle
-        if shufflePlaylist is True:
-            random.shuffle(combine)
-
-    # In case of missing video order information run script
-    except KeyError:
-        print("Database is corrupt")
-        # runScript(2)
-        # viewData(db)
-        return None
-
-    return combine
+def RemoveExtension(filename: str) -> str:
+    return os.path.splitext(filename)[0]
 
 
 def extractVideos():
@@ -134,7 +74,7 @@ def extractVideos():
 
 def CreateWindowLayout(createWindow):
     # Link extraction window
-    if createWindow == 1:
+    if createWindow == WindowTypes.LINK_WINDOW:
         layout = [
             [sg.Multiline('', key='input', size=(48, 28), enable_events=True, focus=True,
                           right_click_menu=['&Right', ['Paste']])],
@@ -146,9 +86,9 @@ def CreateWindowLayout(createWindow):
         return sg.Window(windowTitle, layout, font='Courier 12', modal=True, icon='logo.ico')
 
     # Playlist selection window during download
-    if createWindow == 2:
+    if createWindow == WindowTypes.DOWNLOAD_WINDOW:
         layout = [
-            [sg.Listbox('', key='playlistInput', size=(48, 28), enable_events=True)],
+            [sg.Listbox([""], key='playlistInput', size=(48, 28), enable_events=True)],
             [sg.Text(size=(16, 1)), sg.Button('OK', key='okPlaylistInput', size=(4, 2)),
              sg.Button('Cancel', key='cancelPlaylistInput', size=(7, 2))]
         ]
@@ -232,7 +172,7 @@ def uploadGSheets(currentPlaylist):
     for i in worksheet_list:
         sheets.append(i.title)
 
-    playlistName = os.path.basename(currentPlaylist[:-4])
+    playlistName = os.path.basename(RemoveExtension(currentPlaylist))
 
     # Check if there is a sheet for the playlist
     try:
@@ -289,12 +229,12 @@ def uploadGSheets(currentPlaylist):
 
 
 # Download playlist
-def downloadGSheets(currentPlaylist):
+def downloadGSheets():
     table = accessGSheets()
 
     if table is None:
         print('Couldn\'t access database, canceling...')
-        return currentPlaylist
+        return None, None
 
     # List all the worksheets
     worksheet_list = table.worksheets()
@@ -306,10 +246,10 @@ def downloadGSheets(currentPlaylist):
 
     if playlists is None:
         print('No playlists found in database.')
-        return currentPlaylist
+        return None, None
 
     # Create window to display uploaded playlists
-    window3 = CreateWindowLayout(2)
+    window3 = CreateWindowLayout(WindowTypes.DOWNLOAD_WINDOW)
     window3.finalize()
 
     window3['playlistInput'].update(playlists)
@@ -323,11 +263,11 @@ def downloadGSheets(currentPlaylist):
 
         if event == sg.WIN_CLOSED or event == 'Exit':
             window3.close()
-            break
+            return None, None
 
         if event == 'cancelPlaylistInput':
             window3.close()
-            break
+            return None, None
 
         if event == 'okPlaylistInput':
             if len(values['playlistInput']) > 0:
@@ -370,7 +310,7 @@ def downloadGSheets(currentPlaylist):
 
 
 # Read config.ini
-def readConfig(config):
+def readConfig(config) -> list:
     if not os.path.isfile('config.ini'):
         writeDefaultConfig(config)
 
@@ -418,15 +358,83 @@ class GUI:
         self.config = configparser.ConfigParser()
         self.recentFiles = readConfig(self.config)
         self.currentPlaylist, self.mpvArg, self.db = readPlaylistFromConfig(self.config)
-        self.Link = Query()
+        self.link = Query()
         self.windowSize = (1280, 840)  # Default window size
         self.player = None
         self.values = None
         self.window = None
+        self.shufflePlaylist = False
 
         atexit.register(onExitApp)
 
         self.InitializeGUI()
+
+    def filtering(self):
+        global globalOrder
+        globalOrder = []
+        vD = {}
+        combine = []
+
+        # Replace special characters with a space
+        # These can crash the search
+        filterText = self.values['videoFilter'].translate({ord(c): " " for c in "!@#$%^&*()[]{};:,./<>?\|`~-=_+"})
+
+        videos = self.db.search((self.link.videoId.search(filterText, flags=re.IGNORECASE)) |
+                                (self.link.videoId.search(filterText[-11:], flags=re.IGNORECASE)) |  # For youtube URL
+                                (self.link.title.search(filterText, flags=re.IGNORECASE)) |
+                                (self.link.uploader.search(filterText, flags=re.IGNORECASE)))
+
+        for e, x in enumerate(videos):
+            # Converting order to float to fix sorting
+            vD[e + 1] = {'videoId': x['videoId'], 'duration': x['duration'], 'title': x['title'],
+                         'order': float(x['order'])}
+
+        for i in OrderedDict(sorted(vD.items(), key=lambda x: getitem(x[1], 'order'))):
+            combine.append(f"{vD[i]['videoId']} - {vD[i]['duration']} - {vD[i]['title']}")
+            # Convert float -> int -> str
+            # Variable used for manual sorting
+            globalOrder.append(str(int(vD[i]['order'])))
+
+        # Quick Shuffle
+        if self.shufflePlaylist is True:
+            random.shuffle(combine)
+
+        return combine
+
+    def viewData(self):
+        global globalOrder
+        globalOrder = []
+        vD = {}
+        combine = []
+
+        try:
+            # Add all videos in db to a dictionary
+            for e, x in enumerate(self.db):
+                # Converting order to float to fix sorting
+                vD[e + 1] = {'videoId': x['videoId'], 'duration': x['duration'], 'title': x['title'],
+                             'order': float(x['order'])}
+
+            # Sort dictionary based on key and add to a list
+            for i in OrderedDict(sorted(vD.items(), key=lambda x: getitem(x[1], 'order'))):
+                # print(vD[i]['title'])
+                # print(vD[i]['order'])
+                combine.append(f"{vD[i]['videoId']} - {vD[i]['duration']} - {vD[i]['title']}")
+                # Convert float -> int -> str
+                # Variable used for manual sorting
+                globalOrder.append(str(int(vD[i]['order'])))
+
+            # Quick Shuffle
+            if self.shufflePlaylist is True:
+                random.shuffle(combine)
+
+        # In case of missing video order information run script
+        except KeyError:
+            print("Database is corrupt")
+            # runScript(2)
+            # viewData(db)
+            return None
+
+        return combine
 
     # Move video up in listbox
     def sortUp(self):
@@ -435,27 +443,28 @@ class GUI:
         for i in self.values['videos']:
 
             # Current selection
-            x = self.db.get(self.Link.videoId == i[0:11])
+            x = self.db.get(self.link.videoId == i[0:11])
 
             # Video above the selection
-            # y = db.get(Link.order == str(int(x['order']) - 1))
+            # y = db.get(link.order == str(int(x['order']) - 1))
 
-            y = self.db.get(self.Link.order == str(globalOrder[globalOrder.index(x['order']) - 1]))
+            y = self.db.get(self.link.order == str(globalOrder[globalOrder.index(x['order']) - 1]))
 
             # Check if video is on the top of the list
             # if y is not None:
             if globalOrder.index(x['order']) != 0:
-                # db.update(Set('order', str(int(x['order']) - 1)), Link.videoId == x['videoId'])
-                # db.update(Set('order', str(int(y['order']) + 1)), Link.videoId == y['videoId'])
-                self.db.update(Set('order', str(globalOrder[globalOrder.index(x['order'])])), self.Link.videoId == y['videoId'])
+                # db.update(Set('order', str(int(x['order']) - 1)), link.videoId == x['videoId'])
+                # db.update(Set('order', str(int(y['order']) + 1)), link.videoId == y['videoId'])
+                self.db.update(Set('order', str(globalOrder[globalOrder.index(x['order'])])),
+                               self.link.videoId == y['videoId'])
                 self.db.update(Set('order', str(globalOrder[globalOrder.index(x['order']) - 1])),
-                          self.Link.videoId == x['videoId'])
+                               self.link.videoId == x['videoId'])
             # else:
             # break
 
         vpos = self.window['videos'].Widget.yview()
 
-        self.window['videos'].update(filtering(self.values, self.Link, self.db))
+        self.window['videos'].update(self.filtering())
         self.window['videos'].SetValue(selection)
         self.window['videos'].set_vscroll_position(vpos[0])
         self.window.refresh()
@@ -468,31 +477,31 @@ class GUI:
         for i in reversed(self.values['videos']):
 
             # Current selection
-            x = self.db.get(self.Link.videoId == i[0:11])
+            x = self.db.get(self.link.videoId == i[0:11])
 
             # Video below the selection
-            # y = db.get(Link.order == str(int(x['order']) + 1))
+            # y = db.get(link.order == str(int(x['order']) + 1))
             try:
-                y = self.db.get(self.Link.order == str(globalOrder[globalOrder.index(x['order']) + 1]))
+                y = self.db.get(self.link.order == str(globalOrder[globalOrder.index(x['order']) + 1]))
 
                 # Old way to check if video is on the bottom of the list, doesn't actually do anything atm
                 if y is not None:
-                    # db.update(Set('order', str(int(x['order']) + 1)), Link.videoId == x['videoId'])
-                    # db.update(Set('order', str(int(y['order']) - 1)), Link.videoId == y['videoId'])
+                    # db.update(Set('order', str(int(x['order']) + 1)), link.videoId == x['videoId'])
+                    # db.update(Set('order', str(int(y['order']) - 1)), link.videoId == y['videoId'])
                     self.db.update(Set('order', str(globalOrder[globalOrder.index(x['order'])])),
-                              self.Link.videoId == y['videoId'])
+                                   self.link.videoId == y['videoId'])
                     self.db.update(Set('order', str(globalOrder[globalOrder.index(x['order']) + 1])),
-                              self.Link.videoId == x['videoId'])
+                                   self.link.videoId == x['videoId'])
                 # else:
                 #   break
 
-            # When at the bottom of the list, interestingly this exception this doesn't occur on the top of the list
+            # When at the bottom of the list, interestingly this exception doesn't occur on the top of the list
             except IndexError:
                 continue
 
         vpos = self.window['videos'].Widget.yview()
 
-        self.window['videos'].update(filtering(self.values, self.Link, self.db))
+        self.window['videos'].update(self.filtering())
         self.window['videos'].SetValue(selection)
         self.window['videos'].set_vscroll_position(vpos[0])
         self.window.refresh()
@@ -500,59 +509,63 @@ class GUI:
     # Add youtube links from the input window
     def addLinks(self, window2):
         event, values = window2.read(timeout=0)
+
         links = values['input'].split('\n')
+        # Remove any empty lines
+        links = [x for x in links if x.strip()]
         print(links)
 
         for i in links:
+            videoId = ""
 
             if i.find('https://www.youtube.com/watch?v=') != -1:
                 videoId = i.find('watch?') + 8
                 videoId = i[videoId:videoId + 11]
+                videoId = videoId.strip().replace(" ", "")
 
-                if videoId.find(' ') == -1 and len(videoId) == 11:
-
-                    if (self.db.contains(self.Link.videoId == videoId)) is False:
-                        self.db.insert({'videoId': videoId
-                                      , 'title': '', 'thumbnail': '', 'duration': '', 'uploader': '',
-                                   'order': str(len(self.db) + 1)})
-
-            if i.find('https://youtu.be/') != -1:
+            elif i.find('https://youtu.be/') != -1:
                 videoId = i.find('be/') + 3
                 videoId = i[videoId:videoId + 11]
+                videoId = videoId.strip().replace(" ", "")
 
-                if videoId.find(' ') == -1 and len(videoId) == 11:
+            if len(videoId) == 11:
 
-                    if (self.db.contains(self.Link.videoId == videoId)) is False:
-                        self.db.insert({'videoId': videoId
-                                      , 'title': '', 'thumbnail': '', 'duration': '', 'uploader': '',
-                                   'order': str(len(self.db) + 1)})
+                if (self.db.contains(self.link.videoId == videoId)) is False:
+                    self.db.insert({'videoId': videoId
+                                       , 'title': '', 'thumbnail': '', 'duration': '', 'uploader': '',
+                                    'order': str(len(self.db) + 1)})
+                else:
+                    print(f"Video with id {videoId} is already on the playlist")
+            else:
+                if videoId:
+                    print(f"Video id {videoId} is invalid")
 
         vpos = self.window['videos'].Widget.yview()
 
         window2['input'].update('')
-        self.window['videos'].update(viewData(self.db))
+        self.window['videos'].update(self.viewData())
         self.window['videos'].set_vscroll_position(vpos[0])
         self.window.refresh()
         window2.close()
 
     # Reset listbox view
-    def clear(self):
+    def ClearListbox(self):
         # event, values = window.read(timeout=0)
         vpos = self.window['videos'].Widget.yview()
         selection = self.values['videos']
 
-        self.window['videos'].update(viewData(self.db))
+        self.window['videos'].update(self.viewData())
         self.window['videos'].set_vscroll_position(vpos[0])
         self.window['up'].update(disabled=False)
         self.window['down'].update(disabled=False)
         self.window['videos'].SetValue(selection)
 
     # Update videos that have missing data
-    def update(self):
+    def UpdateVideoData(self):
         ids = [i['videoId'] for i in self.db]
         missingData = []
         for i in ids:
-            title = self.db.get(self.Link.videoId == i)
+            title = self.db.get(self.link.videoId == i)
             title = title.get('title')
             if title == "":
                 missingData.append(i)
@@ -574,17 +587,17 @@ class GUI:
                 video_duration = str(int(info['duration'] / 60))
                 video_duration = video_duration + ':' + str(info['duration'] % 60).zfill(2)
 
-                self.db.update(Set('title', info['title']), self.Link.videoId == i)
-                self.db.update(Set('thumbnail', info['thumbnail']), self.Link.videoId == i)
-                self.db.update(Set('duration', video_duration), self.Link.videoId == i)
-                self.db.update(Set('uploader', info['uploader']), self.Link.videoId == i)
+                self.db.update(Set('title', info['title']), self.link.videoId == i)
+                self.db.update(Set('thumbnail', info['thumbnail']), self.link.videoId == i)
+                self.db.update(Set('duration', video_duration), self.link.videoId == i)
+                self.db.update(Set('uploader', info['uploader']), self.link.videoId == i)
                 time.sleep(3)
             except youtube_dl.utils.DownloadError:
                 print('Unable to download video information!')
 
         vpos = self.window['videos'].Widget.yview()
 
-        self.window['videos'].update(viewData(self.db))
+        self.window['videos'].update(self.viewData())
         self.window['videos'].set_vscroll_position(vpos[0])
 
     # For running db scripts
@@ -592,21 +605,21 @@ class GUI:
         ids = [i['videoId'] for i in self.db]
         for enum, i in enumerate(ids):
             if script == 1:
-                self.db.update(Set('uploader', ''), self.Link.videoId == i)
+                self.db.update(Set('uploader', ''), self.link.videoId == i)
             if script == 2:
-                self.db.update(Set('order', enum + 1), self.Link.videoId == i)
+                self.db.update(Set('order', enum + 1), self.link.videoId == i)
 
     # Create new playlist db
-    def NewPlaylist(self, name, db):
+    def NewPlaylist(self, name):
         newPlaylist = sg.popup_get_text('Input playlist name', default_text=name)
 
         if newPlaylist is not None and newPlaylist != '':
             newPlaylist = f"{os.getcwd()}\\{newPlaylist}.ypl"
             if not os.path.isfile(newPlaylist):
-                db = TinyDB(newPlaylist)
+                self.db = TinyDB(newPlaylist)
                 self.window['videoFilter'].update('')
-                self.window['videos'].update(viewData(db))
-                self.window.TKroot.title('Youtube Playlist Tool - ' + os.path.basename(newPlaylist)[:-4])
+                self.window['videos'].update(self.viewData())
+                self.window.TKroot.title('Youtube Playlist Tool - ' + os.path.basename(RemoveExtension(newPlaylist)))
 
                 self.config['DEFAULT']['current playlist'] = newPlaylist
 
@@ -616,10 +629,11 @@ class GUI:
             else:
                 answer = sg.popup_yes_no('Playlist already exists.\nOverwrite?')
                 if answer:
-                    db = TinyDB(newPlaylist)
+                    self.db = TinyDB(newPlaylist)
                     self.window['videoFilter'].update('')
-                    self.window['videos'].update(viewData(self.db))
-                    self.window.TKroot.title('Youtube Playlist Tool - ' + os.path.basename(newPlaylist)[:-4])
+                    self.window['videos'].update(self.viewData())
+                    self.window.TKroot.title(
+                        'Youtube Playlist Tool - ' + os.path.basename(RemoveExtension(newPlaylist)))
 
                     self.config['DEFAULT']['current playlist'] = newPlaylist
 
@@ -629,7 +643,7 @@ class GUI:
                 else:
                     newPlaylist = None
 
-        return newPlaylist, db
+        return newPlaylist
 
     # Delete selected videos
     def deleteVideos(self):
@@ -643,22 +657,19 @@ class GUI:
 
                     # Reorder videos when one is deleted
                     # Not the most efficient way to do this, but it works
-                    videoOrder = self.db.get(self.Link.videoId == i[0:i.find(' ')])
+                    videoOrder = self.db.get(self.link.videoId == i[0:i.find(' ')])
                     videoOrder = int(videoOrder['order'])
                     for x in range(len(self.db) - videoOrder - 1):
-                        self.db.update(Set('order', str(videoOrder + x)), self.Link.order == str(videoOrder + x + 1))
+                        self.db.update(Set('order', str(videoOrder + x)), self.link.order == str(videoOrder + x + 1))
 
-                    self.db.remove(self.Link.videoId == i[0:i.find(' ')])
+                    self.db.remove(self.link.videoId == i[0:i.find(' ')])
 
                 vpos = self.window['videos'].Widget.yview()
 
-                self.window['videos'].update(filtering(self.values, self.Link, self.db))
+                self.window['videos'].update(self.filtering())
                 self.window['videos'].set_vscroll_position(vpos[0])
 
     def InitializeGUI(self):
-
-        global shufflePlaylist
-        shufflePlaylist = False
 
         # Initialize pySimpleGUI
         sg.theme('Topanga')
@@ -688,11 +699,14 @@ class GUI:
             # [sg.Button('Script')]  # For running quick db scripts
         ]
 
-        col3 = [[sg.Text('Copy To Clipboard', pad=((20, 0), (0, 0)))],
+        col3 = [[sg.Text('Copy Settings', pad=((20, 0), (0, 0)))],
                 [sg.Text(''), sg.Radio('Normal', group_id='method', default=True, key='copy method'),
-                 sg.Radio('Shuffled', group_id='method')],
-                [sg.Text(''), sg.Radio('List  ', group_id='type', default=True, key='copy type'),
-                 sg.Radio('mpv list', group_id='type')],
+                 sg.Radio('Shuffled', group_id='method',
+                          tooltip="Copy a shuffled version of the current playlist into the clipboard")],
+                [sg.Text(''), sg.Radio('List  ', group_id='type', default=True, key='copy type',
+                                       tooltip="Copy videos into a list separated by a line break"),
+                 sg.Radio('mpv list', group_id='type',
+                          tooltip="Copy videos into a list format supported by the mpv player (Space as separator)")],
                 [sg.Button('Copy To Clipboard', k="Copy", pad=(18, 0), s=(20, 0))]
                 ]
 
@@ -702,24 +716,22 @@ class GUI:
 
         layout = [
             [menu_elem],
-            [sg.Listbox(values=viewData(self.db), key='videos', size=(130, 36), enable_events=True,
+            [sg.Listbox(values=self.viewData(), key='videos', size=(130, 36), enable_events=True,
                         right_click_menu=['&Right', ['Copy URL', 'Open URL', 'Play with mpv', 'Delete video(s)']],
                         select_mode='extended')],
             [sg.Column(col1, vertical_alignment="top"), sg.VerticalSeparator(),
              sg.Column(col2, vertical_alignment="top"), sg.VerticalSeparator(),
              sg.Column(col3, vertical_alignment="top"), sg.VerticalSeparator(),
              sg.Column(col4, vertical_alignment="top")],
-            # sg.Text(' Tags', size=(6, 1))], sg.Multiline(size=(20, 2), enable_events=True, key='tags')],
-            # [sg.Text('')],
-            [
-                # sg.Button('Copy Random', key='copy random'),
-                # sg.Text('', size=(47, 1)),
-            ]
         ]
 
-        self.window = sg.Window(f"Youtube Playlist Tool - {os.path.basename(self.currentPlaylist[:-4])}", layout,
-                                font='Courier 12', size=(self.windowSize),
+        self.window = sg.Window(f"Youtube Playlist Tool - {os.path.basename(RemoveExtension(self.currentPlaylist))}",
+                                layout,
+                                font='Courier 12', size=self.windowSize,
                                 resizable=True, icon='logo.ico').finalize()
+
+        # Bind window resize events to the while loop
+        self.window.bind('<Configure>', "WindowEvent")
 
         while True:
             event, self.values = self.window.read()
@@ -727,7 +739,7 @@ class GUI:
                 break
 
             if event == 'Add' or event == 'Add Videos':
-                window2 = CreateWindowLayout(1)
+                window2 = CreateWindowLayout(WindowTypes.LINK_WINDOW)
                 window2.finalize()
 
                 while True:
@@ -764,7 +776,7 @@ class GUI:
                         videoId = self.values['videos'][0][0:11]
                         print(videoId)
 
-                        title = self.db.get(self.Link.videoId == videoId)
+                        title = self.db.get(self.link.videoId == videoId)
                         try:
                             title = title.get('title')
 
@@ -781,24 +793,25 @@ class GUI:
                                     video_duration = str(int(info['duration'] / 60))
                                     video_duration = video_duration + ':' + str(info['duration'] % 60).zfill(2)
 
-                                    self.db.update(Set('title', info['title']), self.Link.videoId == videoId)
-                                    self.db.update(Set('thumbnail', info['thumbnail']), self.Link.videoId == videoId)
-                                    self.db.update(Set('duration', video_duration), self.Link.videoId == videoId)
-                                    self.db.update(Set('uploader', info['uploader']), self.Link.videoId == videoId)
+                                    self.db.update(Set('title', info['title']), self.link.videoId == videoId)
+                                    self.db.update(Set('thumbnail', info['thumbnail']), self.link.videoId == videoId)
+                                    self.db.update(Set('duration', video_duration), self.link.videoId == videoId)
+                                    self.db.update(Set('uploader', info['uploader']), self.link.videoId == videoId)
 
                                     vpos = self.window['videos'].Widget.yview()
 
-                                    self.window['videos'].update(viewData(self.db))
+                                    self.window['videos'].update(self.viewData())
                                     self.window['videos'].set_vscroll_position(vpos[0])
 
                                 except youtube_dl.utils.DownloadError:
                                     print('Unable to download video data')
 
-                            data = self.db.get(self.Link.videoId == videoId)
+                            data = self.db.get(self.link.videoId == videoId)
                             print(data)
                             print('https://www.youtube.com/watch?v=' + data.get('videoId'))
 
-                            # TODO This can also pop the same AttributeError exception, if youtube-dl doesn't work properly
+                            # TODO This can also pop the same AttributeError exception, if youtube-dl doesn't work
+                            #  properly
                             print(data.get('title'))
                             print(data.get('thumbnail'))
                             print(data.get('duration'))
@@ -811,7 +824,7 @@ class GUI:
                     print('List is empty!')
 
             if event == 'Update' or event == 'Update Video Data':
-                self.update()
+                self.UpdateVideoData()
 
             if event == 'Copy URL':
                 urls = []
@@ -845,7 +858,7 @@ class GUI:
             # TODO This does not do anything atm
             if event == "Stop Playback":
                 if self.player is not None:
-                    self.player.terminate()
+                    self.player.kill()
                     self.player = None
 
             if event == 'Delete video(s)':
@@ -855,7 +868,7 @@ class GUI:
 
                 urls = []
 
-                for i in filtering(self.values, self.Link, self.db):
+                for i in self.filtering():
                     urls.append('https://youtu.be/' + i[0:11])
                     print('https://youtu.be/' + i[0:11])
 
@@ -880,7 +893,7 @@ class GUI:
             if event == 'create playlist':
                 urls = []
 
-                for i in filtering(self.values, self.Link, self.db):
+                for i in self.filtering():
                     urls.append(i[0:11])
 
                 random.shuffle(urls)
@@ -895,7 +908,7 @@ class GUI:
 
             if event == 'clear':
                 self.window['videoFilter'].update('')
-                self.clear()
+                self.ClearListbox()
 
             if event == 'up':
                 self.sortUp()
@@ -905,14 +918,15 @@ class GUI:
 
             if event == 'videoFilter':
                 if len(self.values['videoFilter']) > 2:
-                    self.window['videos'].update(filtering(self.values, self.Link, self.db))
+                    self.window['videos'].update(self.filtering())
                 else:
-                    self.clear()
+                    self.ClearListbox()
 
             if event == 'Open playlist':
                 self.currentPlaylist = sg.popup_get_file('', title='Select Playlist',
-                                                    no_window=True, modal=True, keep_on_top=True,
-                                                    file_types=(('YPL files', '*.ypl'),), initial_folder=os.getcwd())
+                                                         no_window=True, modal=True, keep_on_top=True,
+                                                         file_types=(('YPL files', '*.ypl'),),
+                                                         initial_folder=os.getcwd())
                 if not self.currentPlaylist:
                     print('No file selected!')
                 else:
@@ -924,17 +938,23 @@ class GUI:
                             self.recentFiles.pop(9)
                         self.recentFiles.insert(0, self.currentPlaylist)
                         menu_elem.Update(menu_def)
+                    else:
+                        currentIndex = self.recentFiles.index(self.currentPlaylist)
+                        self.recentFiles.insert(0, self.recentFiles.pop(currentIndex))
+                        menu_elem.Update(menu_def)
+
                     self.config['HISTORY']['recent files'] = '\n'.join(self.recentFiles)
 
                     self.window['videoFilter'].update('')
-                    self.window['videos'].update(viewData(self.db))
-                    self.window.TKroot.title(f"Youtube Playlist Tool - {os.path.basename(self.currentPlaylist[:-4])} ")
+                    self.window['videos'].update(self.viewData())
+                    self.window.TKroot.title(
+                        f"Youtube Playlist Tool - {os.path.basename(RemoveExtension(self.currentPlaylist))} ")
 
                     with open('config.ini', 'w', ) as f:
                         self.config.write(f)
 
             if event == 'New playlist':
-                self.currentPlaylist, self.db = self.NewPlaylist('', self.db)
+                self.currentPlaylist = self.NewPlaylist('')
 
             if event == 'mpv arguments':
                 arguments = sg.popup_get_text('Input mpv launch arguments', default_text=self.mpvArg)
@@ -946,19 +966,19 @@ class GUI:
                         self.config.write(f)
 
             if event == 'Shuffle playlist':
-                shufflePlaylist = True
-                self.window['videos'].update(filtering(self.values, self.Link, self.db))
-                shufflePlaylist = False
+                self.shufflePlaylist = True
+                self.window['videos'].update(self.filtering())
+                self.shufflePlaylist = False
 
             # Download a playlist from Google Sheets
             if event == 'Download playlist':
                 chosenPlaylist = None
                 newPlaylist = None
 
-                lines, chosenPlaylist = downloadGSheets(self.currentPlaylist)
+                lines, chosenPlaylist = downloadGSheets()
 
                 if chosenPlaylist is not None:
-                    newPlaylist, self.db = self.NewPlaylist(chosenPlaylist, self.db)
+                    newPlaylist = self.NewPlaylist(chosenPlaylist)
 
                 if newPlaylist is not None:
                     self.currentPlaylist = newPlaylist
@@ -967,7 +987,7 @@ class GUI:
                         f.writelines(lines)
 
                     self.window['videoFilter'].update('')
-                    self.window['videos'].update(viewData(self.db))
+                    self.window['videos'].update(self.viewData())
 
             # Upload a playlist into Google Sheets
             if event == 'Upload playlist':
@@ -977,11 +997,11 @@ class GUI:
                 webbrowser.open('https://github.com/CuriousCod/YoutubePlaylistTool/tree/master')
 
             if event == 'About':
-                sg.popup('Youtube Playlist Tool v1.5.0\n\nhttps://github.com/CuriousCod/YoutubePlaylistTool\n',
+                sg.popup('Youtube Playlist Tool v1.6.0\n\nhttps://github.com/CuriousCod/YoutubePlaylistTool\n',
                          title='About', icon='logo.ico')
 
             # Recent files event
-            for i in self.recentFiles:
+            for enum, i in enumerate(self.recentFiles):
                 if event == i:
                     if os.path.isfile(i):
                         currentPlaylist = i
@@ -992,8 +1012,9 @@ class GUI:
                         menu_elem.Update(menu_def)
 
                         self.window['videoFilter'].update('')
-                        self.window['videos'].update(viewData(self.db))
-                        self.window.TKroot.title(f"Youtube Playlist Tool - {os.path.basename(currentPlaylist[:-4])}")
+                        self.window['videos'].update(self.viewData())
+                        self.window.TKroot.title(
+                            f"Youtube Playlist Tool - {os.path.basename(RemoveExtension(currentPlaylist))}")
 
                         self.config['DEFAULT']['current playlist'] = currentPlaylist
                         self.config['HISTORY']['recent files'] = '\n'.join(self.recentFiles)
@@ -1003,13 +1024,10 @@ class GUI:
                         break
                     else:
                         print('Playlist doesn\'t exist.')
+                        self.recentFiles.pop(enum)
+                        menu_elem.Update(menu_def)
 
-            # Works perfectly when maximizing window, otherwise only updates when any action is taken in the window
-            if self.windowSize != self.window.size:
-                self.window.size = ScaleWindow(self.window)
+            if event == "WindowEvent":
+                ScaleWindow(self.window)
 
         self.window.close()
-
-
-if __name__ == "__main__":
-    GUI()
