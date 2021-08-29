@@ -344,7 +344,7 @@ def writeDefaultConfig(config):
 
 def ScaleWindow(window):
     CurrentWindowSize = window.size
-    VideosElementSize = (int(CurrentWindowSize[0] * 0.1), int(CurrentWindowSize[1] * 0.045))
+    VideosElementSize = (int(CurrentWindowSize[0] * 0.1), int(CurrentWindowSize[1] * 0.0440))
 
     window['videos'].set_size(VideosElementSize)
     return window.size
@@ -362,7 +362,7 @@ class GUI:
         self.recentFiles = readConfig(self.config)
         self.currentPlaylist, self.mpvArg, self.db = readPlaylistFromConfig(self.config)
         self.link = Query()
-        self.windowSize = (1280, 840)  # Default window size
+        self.windowSize = (1280, 860)  # Default window size
         self.player = []
         self.values = None
         self.window = None
@@ -749,8 +749,9 @@ class GUI:
                 ]
 
         col4 = [[sg.Text('Playback Controls')],
-                [sg.Button('▶', k="button_playVideo", size=(3, 0)), sg.Button("■", k="button_stopPlayback", size=(3, 0))],
-                [sg.Checkbox("Allow only one player", k="checkbox_allowOnlyOnePlayer", default=True, tooltip="Closes previous video players before opening a new one")]
+                [sg.Button('▶', k="button_playVideo", size=(3, 0)), sg.Button("■", k="button_stopPlayback", size=(3, 0)), sg.Checkbox("One Player", k="checkbox_onePlayer", default=True, tooltip="Closes previous video players before opening a new one"), ],
+                [sg.Text("Default Volume")],
+                [sg.Slider((0, 100), k="slider_playerVolume", orientation="horizontal", default_value=100, disable_number_display=True, enable_events=True), sg.Text("100 %", k="text_sliderVolume")],
                 ]
 
         layout = [
@@ -892,15 +893,31 @@ class GUI:
                         for url in urls:
                             f.write(url + "\n")
 
-                    if self.values["checkbox_allowOnlyOnePlayer"]:
+                    if self.values["checkbox_onePlayer"]:
                         self.SubprocessActions(ProcessAction.KILL_PROCESS)
 
-                    self.player.append(subprocess.Popen(["mpv", self.mpvArg, "--playlist=mpvPlaylist.txt"]))
+                    args = ["mpv"]
+                    volumeArg = False
+
+                    for arg in self.mpvArg.split(" "):
+                        args.append(arg)
+                        if arg.startswith("--volume="):
+                            volumeArg = True
+
+                    args.append("--playlist=mpvPlaylist.txt")
+
+                    if not volumeArg:
+                        args.append(f"--volume={self.values['slider_playerVolume']}")
+
+                    self.player.append(subprocess.Popen(args))
 
                     self.window["button_stopPlayback"].update(disabled=False)
 
             if event == "button_stopPlayback":
                 self.SubprocessActions(ProcessAction.KILL_PROCESS)
+
+            if event == "slider_playerVolume":
+                self.window["text_sliderVolume"].update(f"{'{00:.0f}'.format(self.values['slider_playerVolume'])} %")
 
             if event == 'Delete video(s)':
                 self.deleteVideos()
