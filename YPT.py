@@ -37,6 +37,9 @@ class WindowTypes(Enum):
     LINK_WINDOW = 1
     DOWNLOAD_WINDOW = 2
 
+class ProcessAction(Enum):
+    PROCESS_EXISTS = 1
+    KILL_PROCESS = 2
 
 def RemoveExtension(filename: str) -> str:
     return os.path.splitext(filename)[0]
@@ -360,7 +363,7 @@ class GUI:
         self.currentPlaylist, self.mpvArg, self.db = readPlaylistFromConfig(self.config)
         self.link = Query()
         self.windowSize = (1280, 840)  # Default window size
-        self.player = None
+        self.player = []
         self.values = None
         self.window = None
         self.shufflePlaylist = False
@@ -570,9 +573,11 @@ class GUI:
             if title == "":
                 missingData.append(i)
 
-        print(str(len(missingData)) + ' videos missing video information')
         if len(missingData) > 0:
-            print('Downloading video information...')
+            print(str(len(missingData)) + ' videos missing data')
+            print('Downloading video data...')
+        else:
+            print("All videos are up to date")
 
         for count, i in enumerate(missingData):
             try:
@@ -669,6 +674,39 @@ class GUI:
                 self.window['videos'].update(self.filtering())
                 self.window['videos'].set_vscroll_position(vpos[0])
 
+    # Disable/Enable playback buttons depending on current video playback status
+    def ToggleButtons(self):
+        videoPlaying = bool
+        videoSelected = len(self.values["videos"]) > 0
+
+        videoPlaying = self.SubprocessActions(ProcessAction.PROCESS_EXISTS)
+
+        self.window["button_playVideo"].update(disabled=not videoSelected)
+        self.window["button_stopPlayback"].update(disabled=not videoPlaying)
+
+    def SubprocessActions(self, action: ProcessAction) -> bool:
+        if action == ProcessAction.PROCESS_EXISTS:
+            for process in self.player:
+                # Check if process has returned a return code
+                if process.poll() is None:
+                    return True
+            return False
+
+        # Kill all previous processes from the list
+        if action == ProcessAction.KILL_PROCESS:
+            stoppedProcesses = []
+            for enum, process in enumerate(self.player):
+                if process.poll() is None:
+                    process.kill()
+                    stoppedProcesses.append(enum)
+
+            # Clean up process list
+            stoppedProcesses = reversed(stoppedProcesses)
+            for i in stoppedProcesses:
+                self.player.pop(i)
+
+        return True
+
     def InitializeGUI(self):
 
         # Initialize pySimpleGUI
@@ -711,7 +749,8 @@ class GUI:
                 ]
 
         col4 = [[sg.Text('Playback Controls')],
-                [sg.Button('▶', k="playVideo", size=(3, 0)), sg.Button("■", k="Stop Playback", size=(3, 0))]
+                [sg.Button('▶', k="button_playVideo", size=(3, 0)), sg.Button("■", k="button_stopPlayback", size=(3, 0))],
+                [sg.Checkbox("Allow only one player", k="checkbox_allowOnlyOnePlayer", default=True, tooltip="Closes the previous video player before opening a new one")]
                 ]
 
         layout = [
@@ -841,25 +880,27 @@ class GUI:
                     url = 'https://www.youtube.com/watch?v=' + videoId
                     webbrowser.open(url)
 
-            if event == 'Play with mpv' or event == 'playVideo':
+            if event == 'Play with mpv' or event == 'button_playVideo':
                 urls = []
 
                 for i in self.values['videos']:
                     urls.append('https://youtu.be/' + i[0:11])
 
-                urls = ' '.join(urls)
+                if len(urls) > 0:
 
-                with open('playWithMPV.bat', 'w', encoding='utf-8') as f:
-                    f.writelines('mpv ' + self.mpvArg + ' ' + urls)
+                    with open('mpvPlaylist.txt', 'w', encoding='utf-8') as f:
+                        for url in urls:
+                            f.write(url + "\n")
 
-                # subprocess.Popen('mpv ' + mpvArg + ' ' + urls, shell=True)
-                self.player = subprocess.Popen('playWithMPV.bat', shell=True)
+                    if self.values["checkbox_allowOnlyOnePlayer"]:
+                        self.SubprocessActions(ProcessAction.KILL_PROCESS)
 
-            # TODO This does not do anything atm
-            if event == "Stop Playback":
-                if self.player is not None:
-                    self.player.kill()
-                    self.player = None
+                    self.player.append(subprocess.Popen(["mpv", self.mpvArg, "--playlist=mpvPlaylist.txt"]))
+
+                    self.window["button_stopPlayback"].update(disabled=False)
+
+            if event == "button_stopPlayback":
+                self.SubprocessActions(ProcessAction.KILL_PROCESS)
 
             if event == 'Delete video(s)':
                 self.deleteVideos()
@@ -1029,5 +1070,7 @@ class GUI:
 
             if event == "WindowEvent":
                 ScaleWindow(self.window)
+
+            self.ToggleButtons()
 
         self.window.close()
