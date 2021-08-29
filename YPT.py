@@ -352,8 +352,8 @@ def ScaleWindow(window):
 
 # Clean files when exiting app
 def onExitApp():
-    if os.path.isfile('playWithMPV.bat'):
-        os.remove('playWithMPV.bat')
+    if os.path.isfile('mpvPlaylist.txt'):
+        os.remove('mpvPlaylist.txt')
 
 
 class GUI:
@@ -750,7 +750,7 @@ class GUI:
 
         col4 = [[sg.Text('Playback Controls')],
                 [sg.Button('▶', k="button_playVideo", size=(3, 0)), sg.Button("■", k="button_stopPlayback", size=(3, 0))],
-                [sg.Checkbox("Allow only one player", k="checkbox_allowOnlyOnePlayer", default=True, tooltip="Closes the previous video player before opening a new one")]
+                [sg.Checkbox("Allow only one player", k="checkbox_allowOnlyOnePlayer", default=True, tooltip="Closes previous video players before opening a new one")]
                 ]
 
         layout = [
