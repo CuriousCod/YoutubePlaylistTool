@@ -909,9 +909,11 @@ class GUI:
                     if not volumeArg:
                         args.append(f"--volume={self.values['slider_playerVolume']}")
 
-                    self.player.append(subprocess.Popen(args))
-
-                    self.window["button_stopPlayback"].update(disabled=False)
+                    try:
+                        self.player.append(subprocess.Popen(args))
+                        self.window["button_stopPlayback"].update(disabled=False)
+                    except FileNotFoundError:
+                        print("Could not find mpv in the environment variables")
 
             if event == "button_stopPlayback":
                 self.SubprocessActions(ProcessAction.KILL_PROCESS)
